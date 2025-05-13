@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <string.h>
 #include <sys/wait.h>
 
 extern char **environ;
@@ -10,120 +9,224 @@ extern char **environ;
 
 void print_prompt(void)
 {
-	printf("cisfun$ ");
-	fflush(stdout);
+    write(STDOUT_FILENO, "cisfun$ ", 8);
 }
 
 char *read_command(void)
 {
-	char *cmd = NULL;
-	size_t n = 0;
-	if (getline(&cmd, &n, stdin) == -1)
-		return (NULL);
-	return (cmd);
+    char *cmd = NULL;
+    size_t n = 0;
+    ssize_t len = getline(&cmd, &n, stdin);
+    
+    if (len == -1)
+    {
+        free(cmd);
+        return NULL;
+    }
+    return cmd;
 }
 
 int count_tokens(char *cmd)
 {
-	int count = 0;
-	char *copy = strdup(cmd);
-	char *token = strtok(copy, DELIM);
-
-	while (token)
-	{
-		count++;
-		token = strtok(NULL, DELIM);
-	}
-	free(copy);
-	return (count);
+    int count = 0;
+    int in_token = 0;
+    
+    while (*cmd)
+    {
+        if (*cmd == ' ' || *cmd == '\n')
+        {
+            if (in_token)
+            {
+                count++;
+                in_token = 0;
+            }
+        }
+        else
+        {
+            in_token = 1;
+        }
+        cmd++;
+    }
+    if (in_token)
+        count++;
+    return count;
 }
 
-char *resolve_path(char *cmd)
+int custom_strlen(char *str)
 {
-    char *path = getenv("PATH");
-    char *path_copy = strdup(path);
-    char *dir = strtok(path_copy, ":");
-    char *full_path = NULL;
+    int len = 0;
+    while (str[len])
+        len++;
+    return len;
+}
 
-    if (strchr(cmd, '/')) {
-        if (access(cmd, X_OK) == 0) {
-            full_path = strdup(cmd);
-            free(path_copy);
-            return full_path;
+char *find_in_path(char *cmd, char **env)
+{
+    static char full_path[1024];
+    char *path = NULL;
+    char *dir;
+    int i, j, k, len;
+    
+    /* Check if command contains '/' */
+    i = 0;
+    while (cmd[i])
+    {
+        if (cmd[i] == '/')
+        {
+            if (access(cmd, X_OK) == 0)
+                return cmd;
+            return NULL;
         }
-        free(path_copy);
+        i++;
+    }
+    
+    /* Find PATH in environment */
+    i = 0;
+    while (env[i])
+    {
+        j = 0;
+        while (env[i][j] && env[i][j] != '=')
+            j++;
+        if (env[i][j] == '=' && env[i][j+1] == 'P' && env[i][j+2] == 'A' && 
+            env[i][j+3] == 'T' && env[i][j+4] == 'H')
+        {
+            path = &env[i][j+5];
+            break;
+        }
+        i++;
+    }
+    
+    if (!path)
         return NULL;
-    }
-    while (dir) {
-        full_path = malloc(strlen(dir) + strlen(cmd) + 2);
-        sprintf(full_path, "%s/%s", dir, cmd);
-        if (access(full_path, X_OK) == 0) {
-            free(path_copy);
+    
+    /* Search through PATH directories */
+    dir = path;
+    while (*dir)
+    {
+        char *end = dir;
+        while (*end && *end != ':')
+            end++;
+        
+        len = end - dir;
+        if (len + 1 + i > 1024)
+            return NULL;
+        
+        /* Build full path */
+        for (k = 0; k < len; k++)
+            full_path[k] = dir[k];
+        full_path[len] = '/';
+        for (k = 0; k <= i; k++)
+            full_path[len + 1 + k] = cmd[k];
+        
+        if (access(full_path, X_OK) == 0)
             return full_path;
-        }
-        free(full_path);
-        dir = strtok(NULL, ":");
+        
+        dir = *end ? end + 1 : end;
     }
-    free(path_copy);
     return NULL;
 }
 
 char **build_argv(char *cmd)
 {
-    char **argv = NULL;
-    char *token;
-    int i = 0;
-    char *cmd_copy = strdup(cmd);
-
-    int count = 0;
-    token = strtok(cmd_copy, DELIM);
-    while (token)
-    {
-        count++;
-        token = strtok(NULL, DELIM);
-    }
-    free(cmd_copy);
+    int count = count_tokens(cmd);
+    char **argv;
+    int i, start, argc, len, j;
+    int in_token;
+    
+    if (count == 0)
+        return NULL;
+    
     argv = malloc(sizeof(char *) * (count + 1));
     if (!argv)
         return NULL;
-    cmd_copy = strdup(cmd);
-    token = strtok(cmd_copy, DELIM);
-    while (token)
+    
+    i = 0;
+    in_token = 0;
+    start = 0;
+    argc = 0;
+    
+    while (cmd[i])
     {
-        argv[i++] = strdup(token);
-        token = strtok(NULL, DELIM);
+        if (cmd[i] == ' ' || cmd[i] == '\n')
+        {
+            if (in_token)
+            {
+                len = i - start;
+                argv[argc] = malloc(len + 1);
+                if (!argv[argc])
+                {
+                    for (j = 0; j < argc; j++)
+                        free(argv[j]);
+                    free(argv);
+                    return NULL;
+                }
+                for (j = 0; j < len; j++)
+                    argv[argc][j] = cmd[start + j];
+                argv[argc][len] = '\0';
+                argc++;
+                in_token = 0;
+            }
+        }
+        else if (!in_token)
+        {
+            start = i;
+            in_token = 1;
+        }
+        i++;
     }
-    argv[i] = NULL;
-    free(cmd_copy);
+    
+    if (in_token)
+    {
+        len = i - start;
+        argv[argc] = malloc(len + 1);
+        if (!argv[argc])
+        {
+            for (j = 0; j < argc; j++)
+                free(argv[j]);
+            free(argv);
+            return NULL;
+        }
+        for (j = 0; j < len; j++)
+            argv[argc][j] = cmd[start + j];
+        argv[argc][len] = '\0';
+        argc++;
+    }
+    
+    argv[argc] = NULL;
     return argv;
 }
 
 void execute_command(char **argv)
 {
     char *full_path;
-    int pid;
-    int status;
-
-    full_path = resolve_path(argv[0]);
+    pid_t pid;
+    
+    if (!argv || !argv[0])
+        return;
+    
+    full_path = find_in_path(argv[0], environ);
     if (!full_path)
     {
-        fprintf(stderr, "%s: command not found\n", argv[0]);
+        write(STDERR_FILENO, argv[0], custom_strlen(argv[0]));
+        write(STDERR_FILENO, ": command not found\n", 20);
         return;
     }
+    
     pid = fork();
-    if (pid < 0) {
+    if (pid < 0)
+    {
         perror("fork");
-        free(full_path);
         return;
     }
-    if (pid == 0) {
-        if (execve(full_path, argv, environ) == -1) {
-            perror("execve");
-            exit(EXIT_FAILURE);
-        }
-    } else {
-        wait(&status);
-        free(full_path);
+    else if (pid == 0)
+    {
+        execve(full_path, argv, environ);
+        perror("execve");
+        exit(EXIT_FAILURE);
+    }
+    else
+    {
+        waitpid(pid, NULL, 0);
     }
 }
 
@@ -131,34 +234,54 @@ int main(void)
 {
     char *cmd;
     char **argv;
-    int is_interactive = isatty(STDIN_FILENO);
-    int	i;
-
+    int is_interactive;
+    int exit_cmd;
+    char *ptr;
+    int i;
+    
+    is_interactive = isatty(STDIN_FILENO);
+    
     while (1)
     {
         if (is_interactive)
             print_prompt();
+        
         cmd = read_command();
         if (!cmd)
             break;
-        if (strcmp(cmd, "exit\n") == 0) {
+        
+        /* Check for exit command */
+        exit_cmd = 1;
+        ptr = cmd;
+        while (*ptr == ' ')
+            ptr++;
+        if (!(ptr[0] == 'e' && ptr[1] == 'x' && ptr[2] == 'i' && ptr[3] == 't' && 
+             (ptr[4] == '\n' || ptr[4] == ' ' || ptr[4] == '\0')))
+            exit_cmd = 0;
+        
+        if (exit_cmd)
+        {
             free(cmd);
             break;
         }
+        
         argv = build_argv(cmd);
-        if (!argv) {
-            free(cmd);
-            continue;
-        }
-        execute_command(argv);
-	i = 0;
-	while (argv[i])
-	{
-		free(argv[i]);
-		i++;
-	}
-        free(argv);
         free(cmd);
+        
+        if (argv)
+        {
+            execute_command(argv);
+            
+            /* Free argv array */
+            i = 0;
+            while (argv[i])
+            {
+                free(argv[i]);
+                i++;
+            }
+            free(argv);
+        }
     }
+    
     return 0;
 }
