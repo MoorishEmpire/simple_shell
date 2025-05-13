@@ -25,33 +25,25 @@ char *read_command(void)
 
 int count_tokens(char *cmd)
 {
-	int count = 0;
 	char *copy = strdup(cmd);
 	char *token = strtok(copy, DELIM);
+	int count = token ? 1 : 0;
 
-	while (token)
-	{
-		count++;
-		token = strtok(NULL, DELIM);
-	}
 	free(copy);
 	return (count);
 }
 
 char **build_argv(char *cmd, int argc)
 {
-	char **argv = malloc(sizeof(char *) * (argc + 1));
-	char *token = strtok(cmd, DELIM);
+	char **argv;
+	char *token;
 	int i;
 
+	argv = malloc(sizeof(char *) * 2);
 	if (!argv)
 		return (NULL);
-
-	for (i = 0; i < argc; i++)
-	{
-		argv[i] = token;
-		token = strtok(NULL, DELIM);
-	}
+	token = strtok(cmd, DELIM);
+	argv[0] = token;
 	argv[i] = NULL;
 	return (argv);
 }
@@ -70,7 +62,7 @@ void execute_command(char **argv)
 	{
 		if (execve(argv[0], argv, environ) == -1)
 		{
-			perror("execve");
+			fprintf(stderr, "./shell: No such file or directory\n");
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -90,7 +82,11 @@ int main(void)
 		cmd = read_command();
 		if (!cmd)
 			break;
-
+		if(strcmp(cmd, "exit\n") == 0)
+		{
+			free(cmd);
+			break;
+		}
 		argc = count_tokens(cmd);
 		if (argc == 0)
 		{
