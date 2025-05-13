@@ -37,8 +37,9 @@ char **build_argv(char *cmd, int argc)
 {
 	char **argv;
 	char *token;
-	int i;
+	int i = 0;
 
+	(void)argc;
 	argv = malloc(sizeof(char *) * 2);
 	if (!argv)
 		return (NULL);
