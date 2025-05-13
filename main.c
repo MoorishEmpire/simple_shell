@@ -6,67 +6,111 @@
 
 extern char **environ;
 
+#define DELIM " \n"
+
+void print_prompt(void)
+{
+	printf("cisfun$ ");
+	fflush(stdout);
+}
+
+char *read_command(void)
+{
+	char *cmd = NULL;
+	size_t n = 0;
+	if (getline(&cmd, &n, stdin) == -1)
+		return (NULL);
+	return (cmd);
+}
+
+int count_tokens(char *cmd)
+{
+	int count = 0;
+	char *copy = strdup(cmd);
+	char *token = strtok(copy, DELIM);
+
+	while (token)
+	{
+		count++;
+		token = strtok(NULL, DELIM);
+	}
+	free(copy);
+	return (count);
+}
+
+char **build_argv(char *cmd, int argc)
+{
+	char **argv = malloc(sizeof(char *) * (argc + 1));
+	char *token = strtok(cmd, DELIM);
+	int i;
+
+	if (!argv)
+		return (NULL);
+
+	for (i = 0; i < argc; i++)
+	{
+		argv[i] = token;
+		token = strtok(NULL, DELIM);
+	}
+	argv[i] = NULL;
+	return (argv);
+}
+
+void execute_command(char **argv)
+{
+	int pid = fork();
+	int status;
+
+	if (pid < 0)
+	{
+		perror("fork");
+		return;
+	}
+	if (pid == 0)
+	{
+		if (execve(argv[0], argv, environ) == -1)
+		{
+			perror("execve");
+			exit(EXIT_FAILURE);
+		}
+	}
+	else
+		wait(&status);
+}
+
 int main(void)
 {
-	char *cmd = NULL, *cmd_copy, *token;
-	int pid;
-	char **argv;
+	char *cmd;
 	int argc;
-	int i;
-	int status;
-	char *delim = " \n";
-	size_t n = 0;
+	char **argv;
 
 	while (1)
 	{
-		argc = 0;
-		printf("cisfun$ ");
-		fflush(stdout);
-		if (getline(&cmd, &n, stdin) == -1)
+		print_prompt();
+		cmd = read_command();
+		if (!cmd)
 			break;
-		cmd_copy = strdup(cmd);
-		if (!cmd_copy)
-			continue;
-		token = strtok(cmd_copy, delim);
-		while (token)
-		{
-			argc++;
-			token = strtok(NULL, delim);
-		}
-		free(cmd_copy);
+
+		argc = count_tokens(cmd);
 		if (argc == 0)
+		{
+			free(cmd);
 			continue;
-		argv = malloc(sizeof(char *) * (argc + 1));
+		}
+
+		argv = build_argv(cmd, argc);
 		if (!argv)
-			return (-1);
-		token = strtok(cmd, delim);
-		i = 0;
-		while (i < argc)
 		{
-			argv[i] = token;
-			token = strtok(NULL, delim);
-			i++;
-		}
-		argv[i] = NULL;
-		pid = fork();
-		if (pid < 0)
-		{
-			perror("fork");
-			free(argv);
+			free(cmd);
 			continue;
 		}
-		if (pid == 0)
-		{
-			if (execve(argv[0], argv, environ) == -1)
-			{
-				perror("execve");
-				exit(EXIT_FAILURE);
-			}
-		}
-		else
-			wait(&status);
+
+		execute_command(argv);
+
 		free(argv);
+		free(cmd);
 	}
-	free(cmd);
+
 	return (0);
 }
+
