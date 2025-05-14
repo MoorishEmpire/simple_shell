@@ -63,7 +63,7 @@ char *read_command(void)
 {
     char *cmd = NULL;
     size_t n = 0;
-    ssize_t len = _getline(&cmd, &n, 1);
+    ssize_t len = _getline(&cmd, &n, 0);
     
     if (len == -1)
     {
