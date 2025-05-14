@@ -66,19 +66,18 @@ char *find_in_path(char *cmd, char **env)
     static char full_path[1024];
     char *path = NULL;
     char *dir;
-    int i, len;
+    size_t i, j, len;
 
-    /* Check for absolute path or ./ prefix */
     if (cmd[0] == '/' || (cmd[0] == '.' && cmd[1] == '/')) {
         if (access(cmd, X_OK) == 0)
             return cmd;
         return NULL;
     }
-
-    /* Find PATH in environment */
     i = 0;
     while (env[i]) {
-        if (strncmp(env[i], "PATH=", 5) == 0) {
+        if (env[i][0] == 'P' && env[i][1] == 'A' && 
+            env[i][2] == 'T' && env[i][3] == 'H' && 
+            env[i][4] == '=') {
             path = env[i] + 5;
             break;
         }
@@ -98,10 +97,18 @@ char *find_in_path(char *cmd, char **env)
         len = path - dir;
 
         if (len == 0) {
-            snprintf(full_path, sizeof(full_path), "./%s", cmd);
+            full_path[0] = '.';
+            full_path[1] = '/';
+            j = 2;
         } else {
-            snprintf(full_path, sizeof(full_path), "%.*s/%s", len, dir, cmd);
+            for (j = 0; j < len; j++)
+                full_path[j] = dir[j];
+            full_path[j++] = '/';
         }
+        i = 0;
+        while (cmd[i] && j < sizeof(full_path) - 1)
+            full_path[j++] = cmd[i++];
+        full_path[j] = '\0';
 
         if (access(full_path, X_OK) == 0)
             return full_path;
@@ -188,6 +195,7 @@ char **build_argv(char *cmd)
 void execute_command(char **argv)
 {
     char *full_path;
+    int status;
     pid_t pid;
     
     if (!argv || !argv[0])
@@ -195,11 +203,7 @@ void execute_command(char **argv)
     
     full_path = find_in_path(argv[0], environ);
     if (!full_path)
-    {
-        write(STDERR_FILENO, argv[0], custom_strlen(argv[0]));
-        write(STDERR_FILENO, ": command not found\n", 20);
         return;
-    }
     
     pid = fork();
     if (pid < 0)
@@ -214,9 +218,7 @@ void execute_command(char **argv)
         exit(EXIT_FAILURE);
     }
     else
-    {
-        waitpid(pid, NULL, 0);
-    }
+        waitpid(pid, &status, 0);
 }
 
 int main(void)
@@ -224,7 +226,6 @@ int main(void)
     char *cmd;
     char **argv;
     int is_interactive;
-    int exit_cmd;
     char *ptr;
     int i;
     
@@ -237,20 +238,25 @@ int main(void)
         
         cmd = read_command();
         if (!cmd)
-            break;
-        exit_cmd = 1;
+	{
+		if (is_interactive)
+			write(STDOUT_FILENO, "\n", 1);
+		break;
+	}
+	if (cmd[0] == '\n')
+	{
+		free(cmd);
+		continue;
+	}
         ptr = cmd;
         while (*ptr == ' ')
             ptr++;
-        if (!(ptr[0] == 'e' && ptr[1] == 'x' && ptr[2] == 'i' && ptr[3] == 't' && 
-             (ptr[4] == '\n' || ptr[4] == ' ' || ptr[4] == '\0')))
-            exit_cmd = 0;
-        
-        if (exit_cmd)
-        {
-            free(cmd);
-            break;
-        }
+        if (ptr[0] == 'e' && ptr[1] == 'x' && ptr[2] == 'i' && ptr[3] == 't' && 
+             (ptr[4] == '\n' || ptr[4] == ' ' || ptr[4] == '\0'))
+	{
+		free(cmd);
+		break;
+	}
         
         argv = build_argv(cmd);
         free(cmd);
@@ -267,6 +273,5 @@ int main(void)
             free(argv);
         }
     }
-    
     return 0;
 }
