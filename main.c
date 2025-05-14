@@ -5,6 +5,7 @@
 #include <string.h>
 
 extern char **environ;
+int exit_status = 0;
 
 #define DELIM " \n"
 
@@ -68,11 +69,17 @@ char *find_in_path(char *cmd, char **env)
     char *dir;
     size_t i, j, len;
 
-    if (cmd[0] == '/' || (cmd[0] == '.' && cmd[1] == '/')) {
+    if (cmd[0] == '/' || 
+        (cmd[0] == '.' && (cmd[1] == '/' || 
+                          (cmd[1] == '.' && cmd[2] == '/')))) {
         if (access(cmd, X_OK) == 0)
             return cmd;
+        write(STDERR_FILENO, "./hsh: 1: ", 10);
+        write(STDERR_FILENO, cmd, custom_strlen(cmd));
+        write(STDERR_FILENO, ": not found\n", 12);
         return NULL;
     }
+
     i = 0;
     while (env[i]) {
         if (env[i][0] == 'P' && env[i][1] == 'A' && 
@@ -202,23 +209,27 @@ void execute_command(char **argv)
         return;
     
     full_path = find_in_path(argv[0], environ);
-    if (!full_path)
-        return;
-    
-    pid = fork();
-    if (pid < 0)
-    {
-        perror("fork");
+    if (!full_path) {
+        exit_status = 127;
         return;
     }
-    else if (pid == 0)
-    {
+    
+    pid = fork();
+    if (pid < 0) {
+        perror("fork");
+        exit_status = 1;
+        return;
+    }
+    else if (pid == 0) {
         execve(full_path, argv, environ);
         perror("execve");
         exit(EXIT_FAILURE);
     }
-    else
+    else {
         waitpid(pid, &status, 0);
+        if (WIFEXITED(status))
+            exit_status = WEXITSTATUS(status);
+    }
 }
 
 int main(void)
@@ -237,41 +248,36 @@ int main(void)
             print_prompt();
         
         cmd = read_command();
-        if (!cmd)
-	{
-		if (is_interactive)
-			write(STDOUT_FILENO, "\n", 1);
-		break;
-	}
-	if (cmd[0] == '\n')
-	{
-		free(cmd);
-		continue;
-	}
+        if (!cmd) {
+            if (is_interactive)
+                write(STDOUT_FILENO, "\n", 1);
+            break;
+        }
+        if (cmd[0] == '\n') {
+            free(cmd);
+            continue;
+        }
         ptr = cmd;
         while (*ptr == ' ')
             ptr++;
         if (ptr[0] == 'e' && ptr[1] == 'x' && ptr[2] == 'i' && ptr[3] == 't' && 
-             (ptr[4] == '\n' || ptr[4] == ' ' || ptr[4] == '\0'))
-	{
-		free(cmd);
-		break;
-	}
+             (ptr[4] == '\n' || ptr[4] == ' ' || ptr[4] == '\0')) {
+            free(cmd);
+            break;
+        }
         
         argv = build_argv(cmd);
         free(cmd);
         
-        if (argv)
-        {
+        if (argv) {
             execute_command(argv);
             i = 0;
-            while (argv[i])
-            {
+            while (argv[i]) {
                 free(argv[i]);
                 i++;
             }
             free(argv);
         }
     }
-    return 0;
+    return exit_status;
 }
