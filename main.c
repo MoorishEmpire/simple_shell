@@ -6,6 +6,7 @@
 
 extern char **environ;
 int exit_status = 0;
+char *program;
 
 #define DELIM " \n"
 
@@ -62,6 +63,16 @@ int custom_strlen(char *str)
     return len;
 }
 
+int custom_strcmp(char *s1, char *s2)
+{
+	while (*s1 && *s2 && *s1 == *s2)
+	{
+		s1++;
+		s2++;
+	}
+	return (*s1 - *s2);
+}
+
 char *find_in_path(char *cmd, char **env)
 {
     static char full_path[1024];
@@ -74,7 +85,8 @@ char *find_in_path(char *cmd, char **env)
                           (cmd[1] == '.' && cmd[2] == '/')))) {
         if (access(cmd, X_OK) == 0)
             return cmd;
-        write(STDERR_FILENO, "./hsh: 1: ", 10);
+
+        write(STDERR_FILENO, program, custom_strlen(program));
         write(STDERR_FILENO, cmd, custom_strlen(cmd));
         write(STDERR_FILENO, ": not found\n", 12);
         return NULL;
@@ -199,6 +211,26 @@ char **build_argv(char *cmd)
     return argv;
 }
 
+void	execute_env(char **env)
+{
+	int i;
+
+	i = 0;
+	while (env[i])
+	{
+		write(STDOUT_FILENO, env[i], custom_strlen(env[i]));
+		write(STDOUT_FILENO, "\n", 1);
+		i++;
+	}
+}
+
+int is_builtin(char *cmd)
+{
+	if (custom_strcmp(cmd, "env") == 0)
+		return (1);
+	return (0);
+}
+
 void execute_command(char **argv)
 {
     char *full_path;
@@ -207,6 +239,16 @@ void execute_command(char **argv)
     
     if (!argv || !argv[0])
         return;
+
+    if (is_builtin(argv[0]))
+    {
+	    if (custom_strcmp(argv[0], "env") == 0)
+	    {
+		    execute_env(environ);
+		    exit_status = 0;
+		    return ;
+	    }
+    }
     
     full_path = find_in_path(argv[0], environ);
     if (!full_path) {
@@ -232,7 +274,7 @@ void execute_command(char **argv)
     }
 }
 
-int main(void)
+int main(int ac, char **av)
 {
     char *cmd;
     char **argv;
@@ -240,6 +282,8 @@ int main(void)
     char *ptr;
     int i;
     
+    (void)ac;
+    program = av[0];
     is_interactive = isatty(STDIN_FILENO);
     
     while (1)
