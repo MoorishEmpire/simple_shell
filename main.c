@@ -9,17 +9,61 @@ int exit_status = 0;
 char *program;
 
 #define DELIM " \n"
+#define BUFFER_SIZE 1
 
 void print_prompt(void)
 {
     write(STDOUT_FILENO, "cisfun$ ", 8);
 }
 
+ssize_t _getline(char **lineptr, size_t *n, int fd)
+{
+	static char	buffer[BUFFER_SIZE];
+	size_t		pos = 0;
+	ssize_t		bytes_read;
+	char 		*new_line;
+	size_t		i = 0;
+	
+	if (!lineptr || !n || fd < 0 || BUFFER_SIZE < 1)
+		return (-1);
+	if (*lineptr == NULL || *n == 0)
+	{
+		*n = 128;
+		*lineptr = malloc(*n);
+		if (!lineptr)
+			return (-1);
+	}
+	while ((bytes_read = read(fd, buffer, BUFFER_SIZE)) > 0)
+	{
+		if (pos + 1 >= *n)
+		{
+			*n *= 2;
+			new_line = realloc(*lineptr, *n);
+			if (!new_line)
+				return (-1);
+			*lineptr = new_line;
+
+		}
+		(*lineptr)[pos++] = buffer[i];
+		if (buffer[i] == '\n')
+		{
+			(*lineptr)[pos] = '\0';
+			break;
+		}
+	}
+	if (bytes_read == -1)
+		return (-1);
+	if (bytes_read == 0 && pos == 0)
+		return (0);
+	(*lineptr)[pos] = '\0';
+	return (pos);
+}
+
 char *read_command(void)
 {
     char *cmd = NULL;
     size_t n = 0;
-    ssize_t len = getline(&cmd, &n, stdin);
+    ssize_t len = _getline(&cmd, &n, 1);
     
     if (len == -1)
     {
