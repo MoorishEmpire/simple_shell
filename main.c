@@ -9,61 +9,65 @@ int exit_status = 0;
 char *program;
 
 #define DELIM " \n"
-#define BUFFER_SIZE 1
+#define READ_SIZE 1
 
 void print_prompt(void)
 {
     write(STDOUT_FILENO, "cisfun$ ", 8);
 }
 
-ssize_t _getline(char **lineptr, size_t *n, int fd)
+ssize_t _getline(char **lineptr, size_t *n)
 {
-	static char	buffer[BUFFER_SIZE];
-	size_t		pos = 0;
-	ssize_t		bytes_read;
-	char 		*new_line;
-	size_t		i = 0;
-	
-	if (!lineptr || !n )
-		return (-1);
-	if (*lineptr == NULL || *n == 0)
-	{
-		*n = 128;
-		*lineptr = malloc(*n);
-		if (!lineptr)
-			return (-1);
-	}
-	while ((bytes_read = read(fd, buffer, BUFFER_SIZE)) > 0)
-	{
-		if (pos + 1 >= *n)
-		{
-			*n *= 2;
-			new_line = realloc(*lineptr, *n);
-			if (!new_line)
-				return (-1);
-			*lineptr = new_line;
+    static char buffer[READ_SIZE];
+    static ssize_t buf_pos = 0;
+    static ssize_t buf_size = 0;
+    ssize_t total_read = 0;
+    char *line = NULL;
+    size_t line_size = 0;
+    char c;
 
-		}
-		(*lineptr)[pos++] = buffer[i];
-		if (buffer[i] == '\n')
-		{
-			(*lineptr)[pos] = '\0';
-			break;
-		}
-	}
-	if (bytes_read == -1)
-		return (-1);
-	if (bytes_read == 0 && pos == 0)
-		return (0);
-	(*lineptr)[pos] = '\0';
-	return (pos);
+    if (!lineptr || !n)
+        return -1;
+
+    *lineptr = NULL;
+    *n = 0;
+
+    while (1)
+    {
+        if (buf_pos >= buf_size)
+        {
+            buf_size = read(STDIN_FILENO, buffer, READ_SIZE);
+            if (buf_size <= 0)
+                return (total_read > 0) ? total_read : -1;
+            buf_pos = 0;
+        }
+
+        c = buffer[buf_pos++];
+        if (line_size + 1 >= *n)
+        {
+            *n += READ_SIZE;
+            line = realloc(line, *n);
+            if (!line)
+                return -1;
+        }
+
+        line[line_size++] = c;
+        total_read++;
+
+        if (c == '\n')
+            break;
+    }
+
+    line[line_size] = '\0';
+    *lineptr = line;
+    return total_read;
 }
 
 char *read_command(void)
 {
     char *cmd = NULL;
     size_t n = 0;
-    ssize_t len = _getline(&cmd, &n, 0);
+    ssize_t len = _getline(&cmd, &n);
     
     if (len == -1)
     {
