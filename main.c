@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/wait.h>
+#include <string.h>
 
 extern char **environ;
 
@@ -65,64 +66,41 @@ char *find_in_path(char *cmd, char **env)
     static char full_path[1024];
     char *path = NULL;
     char *dir;
-    int i, j, k, len;
-    
-    /* Check if command contains '/' */
-    i = 0;
-    while (cmd[i])
-    {
-        if (cmd[i] == '/')
-        {
-            if (access(cmd, X_OK) == 0)
-                return cmd;
-            return NULL;
-        }
-        i++;
-    }
-    
-    /* Find PATH in environment */
+    int len;
+    int i;
+
+    if (access(cmd, X_OK) == 0)
+        return cmd;
+
     i = 0;
     while (env[i])
     {
-        j = 0;
-        while (env[i][j] && env[i][j] != '=')
-            j++;
-        if (env[i][j] == '=' && env[i][j+1] == 'P' && env[i][j+2] == 'A' && 
-            env[i][j+3] == 'T' && env[i][j+4] == 'H')
+        if (strncmp(env[i], "PATH=", (size_t)5) == 0)
         {
-            path = &env[i][j+5];
+            path = env[i] + 5;
             break;
         }
-        i++;
+	i++;
     }
-    
+
     if (!path)
         return NULL;
-    
-    /* Search through PATH directories */
-    dir = path;
-    while (*dir)
+
+    while (*path)
     {
-        char *end = dir;
-        while (*end && *end != ':')
-            end++;
-        
-        len = end - dir;
-        if (len + 1 + i > 1024)
-            return NULL;
-        
-        /* Build full path */
-        for (k = 0; k < len; k++)
-            full_path[k] = dir[k];
-        full_path[len] = '/';
-        for (k = 0; k <= i; k++)
-            full_path[len + 1 + k] = cmd[k];
-        
+        dir = path;
+        while (*path && *path != ':')
+            path++;
+        len = path - dir;
+
+        snprintf(full_path, sizeof(full_path), "%.*s/%s", len, dir, cmd);
         if (access(full_path, X_OK) == 0)
             return full_path;
-        
-        dir = *end ? end + 1 : end;
+
+        if (*path == ':')
+            path++;
     }
+
     return NULL;
 }
 
@@ -249,8 +227,6 @@ int main(void)
         cmd = read_command();
         if (!cmd)
             break;
-        
-        /* Check for exit command */
         exit_cmd = 1;
         ptr = cmd;
         while (*ptr == ' ')
@@ -271,8 +247,6 @@ int main(void)
         if (argv)
         {
             execute_command(argv);
-            
-            /* Free argv array */
             i = 0;
             while (argv[i])
             {
