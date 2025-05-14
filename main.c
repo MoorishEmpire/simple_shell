@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/wait.h>
-#include <string.h>
+#include <stddef.h>
 
 extern char **environ;
 int exit_status = 0;
@@ -10,6 +10,48 @@ char *program;
 
 #define DELIM " \n"
 #define BUFFER_SIZE 1024
+
+void	*_realloc(void *ptr, unsigned int old_size, unsigned int new_size)
+{
+	char	*new;
+	unsigned int	i;
+	unsigned int	size;
+
+	if (ptr == NULL)
+	{
+		new = malloc(new_size);
+		if (new == NULL)
+			return (NULL);
+		return ((void *)new);
+	}
+
+	if (new_size == 0)
+	{
+		free(ptr);
+		return (NULL);
+	}
+
+	if (new_size == old_size)
+	{
+		return (ptr);
+	}
+
+	size = (new_size < old_size) ? new_size : old_size;
+
+	new = malloc(new_size);
+	if (new == NULL)
+		return (NULL);
+
+	i = 0;
+	while (i < size)
+	{
+		new[i] = ((char *)ptr)[i];
+		i++;
+	}
+
+	free(ptr);
+	return ((void *)new);
+}
 
 void print_prompt(void)
 {
@@ -50,7 +92,7 @@ ssize_t _getline(char **lineptr, size_t *n, int fd)
         
         if (line_pos + 1 >= *n) {
             *n *= 2;
-            new_ptr = realloc(*lineptr, *n);
+            new_ptr = _realloc(*lineptr, *n / 2, *n);
             if (new_ptr == NULL)
                 return -1;
             *lineptr = new_ptr;
