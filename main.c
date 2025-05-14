@@ -66,41 +66,52 @@ char *find_in_path(char *cmd, char **env)
     static char full_path[1024];
     char *path = NULL;
     char *dir;
-    int len;
-    int i;
+    int i, len;
 
-    if (access(cmd, X_OK) == 0)
-        return cmd;
+    /* Check for absolute path or ./ prefix */
+    if (cmd[0] == '/' || (cmd[0] == '.' && cmd[1] == '/')) {
+        if (access(cmd, X_OK) == 0)
+            return cmd;
+        return NULL;
+    }
 
+    /* Find PATH in environment */
     i = 0;
-    while (env[i])
-    {
-        if (strncmp(env[i], "PATH=", (size_t)5) == 0)
-        {
+    while (env[i]) {
+        if (strncmp(env[i], "PATH=", 5) == 0) {
             path = env[i] + 5;
             break;
         }
-	i++;
+        i++;
     }
 
-    if (!path)
+    if (!path || !*path) {
+        write(STDERR_FILENO, "./hsh: 1: ", 10);
+        write(STDERR_FILENO, cmd, custom_strlen(cmd));
+        write(STDERR_FILENO, ": not found\n", 12);
         return NULL;
+    }
 
-    while (*path)
-    {
+    while (*path) {
         dir = path;
-        while (*path && *path != ':')
-            path++;
+        while (*path && *path != ':') path++;
         len = path - dir;
 
-        snprintf(full_path, sizeof(full_path), "%.*s/%s", len, dir, cmd);
+        if (len == 0) {
+            snprintf(full_path, sizeof(full_path), "./%s", cmd);
+        } else {
+            snprintf(full_path, sizeof(full_path), "%.*s/%s", len, dir, cmd);
+        }
+
         if (access(full_path, X_OK) == 0)
             return full_path;
 
-        if (*path == ':')
-            path++;
+        if (*path == ':') path++;
     }
 
+    write(STDERR_FILENO, "./hsh: 1: ", 10);
+    write(STDERR_FILENO, cmd, custom_strlen(cmd));
+    write(STDERR_FILENO, ": not found\n", 12);
     return NULL;
 }
 
