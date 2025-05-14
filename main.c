@@ -9,65 +9,70 @@ int exit_status = 0;
 char *program;
 
 #define DELIM " \n"
-#define READ_SIZE 1
+#define BUFFER_SIZE 1024
 
 void print_prompt(void)
 {
     write(STDOUT_FILENO, "cisfun$ ", 8);
 }
 
-ssize_t _getline(char **lineptr, size_t *n)
+ssize_t _getline(char **lineptr, size_t *n, int fd)
 {
-    static char buffer[READ_SIZE];
-    static ssize_t buf_pos = 0;
-    static ssize_t buf_size = 0;
-    ssize_t total_read = 0;
-    char *line = NULL;
-    size_t line_size = 0;
-    char c;
-
-    if (!lineptr || !n)
+    static char buffer[BUFFER_SIZE];
+    static size_t buffer_pos = 0;
+    static size_t buffer_size = 0;
+    size_t line_pos = 0;
+    ssize_t bytes_read;
+    char *new_ptr;
+    
+    if (!lineptr || !n || fd < 0)
         return -1;
-
-    *lineptr = NULL;
-    *n = 0;
-
-    while (1)
-    {
-        if (buf_pos >= buf_size)
-        {
-            buf_size = read(STDIN_FILENO, buffer, READ_SIZE);
-            if (buf_size <= 0)
-                return (total_read > 0) ? total_read : -1;
-            buf_pos = 0;
-        }
-
-        c = buffer[buf_pos++];
-        if (line_size + 1 >= *n)
-        {
-            *n += READ_SIZE;
-            line = realloc(line, *n);
-            if (!line)
-                return -1;
-        }
-
-        line[line_size++] = c;
-        total_read++;
-
-        if (c == '\n')
-            break;
+    
+    if (*lineptr == NULL || *n == 0) {
+        *n = 128;
+        *lineptr = malloc(*n);
+        if (*lineptr == NULL)
+            return -1;
     }
-
-    line[line_size] = '\0';
-    *lineptr = line;
-    return total_read;
+    
+    while (1) {
+        if (buffer_pos >= buffer_size) {
+            bytes_read = read(fd, buffer, BUFFER_SIZE);
+            if (bytes_read <= 0) {
+                if (line_pos == 0)
+                    return -1;
+                (*lineptr)[line_pos] = '\0';
+                return line_pos;
+            }
+            buffer_size = bytes_read;
+            buffer_pos = 0;
+        }
+        
+        if (line_pos + 1 >= *n) {
+            *n *= 2;
+            new_ptr = realloc(*lineptr, *n);
+            if (new_ptr == NULL)
+                return -1;
+            *lineptr = new_ptr;
+        }
+        
+        (*lineptr)[line_pos] = buffer[buffer_pos];
+        buffer_pos++;
+        
+        if ((*lineptr)[line_pos] == '\n') {
+            (*lineptr)[line_pos + 1] = '\0';
+            return line_pos + 1;
+        }
+        
+        line_pos++;
+    }
 }
 
 char *read_command(void)
 {
     char *cmd = NULL;
     size_t n = 0;
-    ssize_t len = _getline(&cmd, &n);
+    ssize_t len = _getline(&cmd, &n, STDIN_FILENO);
     
     if (len == -1)
     {
