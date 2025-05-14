@@ -24,7 +24,7 @@ ssize_t _getline(char **lineptr, size_t *n, int fd)
 	char 		*new_line;
 	size_t		i = 0;
 	
-	if (!lineptr || !n || fd < 0 || BUFFER_SIZE < 1)
+	if (!lineptr || !n )
 		return (-1);
 	if (*lineptr == NULL || *n == 0)
 	{
