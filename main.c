@@ -487,7 +487,6 @@ int	main(int ac, char **av)
 						write(STDERR_FILENO, "./hsh: 1: exit: Illegal number: ",
 							32);
 						write(STDERR_FILENO, num_str, custom_strlen(num_str));
-						write(STDERR_FILENO, "\n", 1);
 						exit_status = 2;
 					}
 					else
