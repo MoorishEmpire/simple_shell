@@ -538,10 +538,8 @@ void	execute_command(char **argv)
             execute_env(environ);
         else if (custom_strcmp(argv[0], "setenv") == 0)
         {
-            if (!argv[1])
+            if (!argv[1] || !argv[2])
                 write(STDERR_FILENO, "setenv: too few arguments\n", 25);
-            else if (!argv[2])
-                execute_setenv(argv[1], "", 1);
             else
                 execute_setenv(argv[1], argv[2], 1);
         }
