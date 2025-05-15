@@ -424,19 +424,18 @@ void	execute_env(char **env)
 
 int execute_setenv(const char *name, const char *value, int overwrite)
 {
-    int i = 0;
-    int name_len = custom_strlen(name);
+    int i = 0, name_len, env_size = 0;
     char *new_var;
-    char **new_environ;
-    int	env_size;
-    
+    char **new_environ, **old_environ;
+
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
-	    write(STDERR_FILENO, "./hsh: setenv: Invalid variable name\n", 36);
-	    return (-1);
+        write(STDERR_FILENO, "./hsh: setenv: Invalid variable name\n", 36);
+        exit_status = 1;
+        return (-1);
     }
 
-    env_size = 0;
+    name_len = custom_strlen(name);
     while (environ[env_size])
         env_size++;
 
@@ -445,15 +444,22 @@ int execute_setenv(const char *name, const char *value, int overwrite)
         if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
         {
             if (!overwrite)
+            {
+                exit_status = 0;
                 return (0);
+            }
             new_var = malloc(name_len + custom_strlen(value) + 2);
             if (!new_var)
+            {
+                exit_status = 1;
                 return (-1);
+            }
             custom_strcpy(new_var, name);
             custom_strcat(new_var, "=");
             custom_strcat(new_var, value);
             free(environ[i]);
             environ[i] = new_var;
+            exit_status = 0;
             return (0);
         }
         i++;
@@ -461,13 +467,17 @@ int execute_setenv(const char *name, const char *value, int overwrite)
 
     new_environ = malloc(sizeof(char *) * (env_size + 2));
     if (!new_environ)
+    {
+        exit_status = 1;
         return (-1);
+    }
     for (i = 0; i < env_size; i++)
         new_environ[i] = environ[i];
     new_var = malloc(name_len + custom_strlen(value) + 2);
     if (!new_var)
     {
         free(new_environ);
+        exit_status = 1;
         return (-1);
     }
     custom_strcpy(new_var, name);
@@ -476,22 +486,22 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     new_environ[env_size] = new_var;
     new_environ[env_size + 1] = NULL;
 
+    old_environ = environ;
     environ = new_environ;
+    free(old_environ);
+    exit_status = 0;
     return (0);
 }
 
 int execute_unsetenv(const char *name)
 {
-    int i = 0;
-    int j = 0;
-    int name_len;
-    char **new_environ;
-    int env_size = 0;
-    int found = 0;
-    
+    int i = 0, j = 0, name_len, env_size = 0, found = 0;
+    char **new_environ, **old_environ;
+
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
-	write(STDERR_FILENO, "./hsh: unsetenv: Invalid variable name\n", 38);
+        write(STDERR_FILENO, "./hsh: unsetenv: Invalid variable name\n", 38);
+        exit_status = 1;
         return (-1);
     }
 
@@ -528,8 +538,11 @@ int execute_unsetenv(const char *name)
         exit_status = 0;
         return (0);
     }
-    
+
+    old_environ = environ;
     environ = new_environ;
+    free(old_environ);
+    exit_status = 0;
     return (0);
 }
 
@@ -544,159 +557,204 @@ int	is_builtin(char *cmd)
 	return (0);
 }
 
-void	execute_command(char **argv)
+void execute_command(char **argv)
 {
-	char	*full_path;
-	int		status;
-	pid_t	pid;
+    char *full_path;
+    int status;
+    pid_t pid;
 
-	if (!argv || !argv[0])
-		return ;
+    if (!argv || !argv[0])
+        return;
 
-	if (is_builtin(argv[0]))
-	{
+    if (is_builtin(argv[0]))
+    {
         if (custom_strcmp(argv[0], "env") == 0)
+        {
             execute_env(environ);
+            exit_status = 0;
+        }
         else if (custom_strcmp(argv[0], "setenv") == 0)
         {
             if (!argv[1] || !argv[2])
-	    {
-		write(STDERR_FILENO, "./hsh: setenv: Too few arguments\n", 33);
-		exit_status = 1;
-	    }
+            {
+                write(STDERR_FILENO, "./hsh: setenv: Too few arguments\n", 33);
+                exit_status = 1;
+            }
             else
-	    {
-               if (execute_setenv(argv[1], argv[2], 1) == -1)
-		       exit_status = 1;
-	       else
-		       exit_status = 0;
-	    }
+            {
+                if (execute_setenv(argv[1], argv[2], 1) == -1)
+                    exit_status = 1;
+                else
+                    exit_status = 0;
+            }
         }
         else if (custom_strcmp(argv[0], "unsetenv") == 0)
         {
             if (!argv[1])
-	    {
-                write(STDERR_FILENO, "./hsh: unsetenv: too few arguments\n", 35);
-		exit_status = 1;
-	    }
+            {
+                write(STDERR_FILENO, "./hsh: unsetenv: Too few arguments\n", 35);
+                exit_status = 1;
+            }
             else
-	    {
+            {
                 if (execute_unsetenv(argv[1]) == -1)
-			exit_status = 1;
-		else
-			exit_status = 0;
-	    }
+                    exit_status = 1;
+                else
+                    exit_status = 0;
+            }
         }
         return;
-	}
-	full_path = find_in_path(argv[0], environ);
-	if (!full_path)
-	{
-		exit_status = 127;
-		return ;
-	}
-	pid = fork();
-	if (pid < 0)
-	{
-		perror("fork");
-		exit_status = 1;
-		return ;
-	}
-	else if (pid == 0)
-	{
-		execve(full_path, argv, environ);
-		perror("execve");
-		exit(EXIT_FAILURE);
-	}
-	else
-	{
-		waitpid(pid, &status, 0);
-		if (WIFEXITED(status))
-			exit_status = WEXITSTATUS(status);
-	}
+    }
+
+    full_path = find_in_path(argv[0], environ);
+    if (!full_path)
+    {
+        exit_status = 127;
+        return;
+    }
+    pid = fork();
+    if (pid < 0)
+    {
+        perror("fork");
+        exit_status = 1;
+        return;
+    }
+    else if (pid == 0)
+    {
+        execve(full_path, argv, environ);
+        perror("execve");
+        exit(EXIT_FAILURE);
+    }
+    else
+    {
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status))
+            exit_status = WEXITSTATUS(status);
+    }
 }
 
-int	main(int ac, char **av)
+char **copy_environ(void)
 {
-	char	*cmd;
-	char	**argv;
-	int		is_interactive;
-	char	*ptr;
-	int		i;
-	char	*num_str;
-	long	num;
+    int env_size = 0;
+    char **new_environ;
+    int i;
 
-	(void)ac;
-	program = av[0];
-	is_interactive = isatty(STDIN_FILENO);
-	while (1)
-	{
-		if (is_interactive)
-			print_prompt();
-		cmd = read_command();
-		if (!cmd)
-		{
-			if (is_interactive)
-				write(STDOUT_FILENO, "\n", 1);
-			break ;
-		}
-		if (cmd[0] == '\n')
-		{
-			free(cmd);
-			continue ;
-		}
-		ptr = cmd;
-		while (*ptr == ' ')
-			ptr++;
-		if (ptr[0] == 'e' && ptr[1] == 'x' && ptr[2] == 'i' && ptr[3] == 't'
-				&& (ptr[4] == '\n' || ptr[4] == ' ' || ptr[4] == '\0'))
-		{
-			if (ptr[4] == ' ')
-			{
-				num_str = ptr + 5;
-				while (*num_str == ' ')
-					num_str++;
-				if (!is_valid_number(num_str))
-				{
-					write(STDERR_FILENO, "./hsh: 1: exit: Illegal number: ", 32);
-					while (*num_str && *num_str != ' ' && *num_str != '\n')
-					{
-						write(STDERR_FILENO, num_str, 1);
-						num_str++;
-					}
-					write(STDERR_FILENO, "\n", 1);
-					exit_status = 2;
-				}
-				else
-				{
-					num = _atol(num_str);
-					if (num < 0)
-					{
-						write(STDERR_FILENO, "./hsh: 1: exit: Illegal number: ",
-							32);
-						write(STDERR_FILENO, num_str, custom_strlen(num_str));
-						exit_status = 2;
-					}
-					else
-						exit_status = (int)(num % 256);
-				}
-			}
-			free(cmd);
-			exit(exit_status);
-		}	
-		argv = build_argv(cmd);
-		free(cmd);
-		if (argv)
-		{
-			execute_command(argv);
-			i = 0;
-			while (argv[i])
-			{
-				free(argv[i]);
-				i++;
-			}
-			free(argv);
-		}
-	}
-	return (exit_status);
+    while (environ[env_size])
+        env_size++;
+    new_environ = malloc(sizeof(char *) * (env_size + 1));
+    if (!new_environ)
+        return NULL;
+    for (i = 0; i < env_size; i++)
+    {
+        new_environ[i] = malloc(custom_strlen(environ[i]) + 1);
+        if (!new_environ[i])
+        {
+            while (--i >= 0)
+                free(new_environ[i]);
+            free(new_environ);
+            return NULL;
+        }
+        custom_strcpy(new_environ[i], environ[i]);
+    }
+    new_environ[env_size] = NULL;
+    return new_environ;
+}
+
+int main(int ac, char **av)
+{
+    char *cmd;
+    char **argv;
+    int is_interactive;
+    char *ptr;
+    int i;
+    char *num_str;
+    long num;
+
+    (void)ac;
+    program = av[0];
+    environ = copy_environ();
+    if (!environ)
+    {
+        write(STDERR_FILENO, "Failed to initialize environment\n", 32);
+        exit(1);
+    }
+    is_interactive = isatty(STDIN_FILENO);
+    while (1)
+    {
+        if (is_interactive)
+            print_prompt();
+        cmd = read_command();
+        if (!cmd)
+        {
+            if (is_interactive)
+                write(STDOUT_FILENO, "\n", 1);
+            break;
+        }
+        if (cmd[0] == '\n')
+        {
+            free(cmd);
+            continue;
+        }
+        ptr = cmd;
+        while (*ptr == ' ')
+            ptr++;
+        if (ptr[0] == 'e' && ptr[1] == 'x' && ptr[2] == 'i' && ptr[3] == 't'
+                && (ptr[4] == '\n' || ptr[4] == ' ' || ptr[4] == '\0'))
+        {
+            if (ptr[4] == ' ')
+            {
+                num_str = ptr + 5;
+                while (*num_str == ' ')
+                    num_str++;
+                if (!is_valid_number(num_str))
+                {
+                    write(STDERR_FILENO, "./hsh: 1: exit: Illegal number: ", 32);
+                    while (*num_str && *num_str != ' ' && *num_str != '\n')
+                    {
+                        write(STDERR_FILENO, num_str, 1);
+                        num_str++;
+                    }
+                    write(STDERR_FILENO, "\n", 1);
+                    exit_status = 2;
+                }
+                else
+                {
+                    num = _atol(num_str);
+                    if (num < 0)
+                    {
+                        write(STDERR_FILENO, "./hsh: 1: exit: Illegal number: ",
+                            32);
+                        write(STDERR_FILENO, num_str, custom_strlen(num_str));
+                        exit_status = 2;
+                    }
+                    else
+                        exit_status = (int)(num % 256);
+                }
+            }
+            free(cmd);
+            i = 0;
+            while (environ[i])
+                free(environ[i++]);
+            free(environ);
+            exit(exit_status);
+        }
+        argv = build_argv(cmd);
+        free(cmd);
+        if (argv)
+        {
+            execute_command(argv);
+            i = 0;
+            while (argv[i])
+            {
+                free(argv[i]);
+                i++;
+            }
+            free(argv);
+        }
+    }
+    i = 0;
+    while (environ[i])
+        free(environ[i++]);
+    free(environ);
+    return (exit_status);
 }
