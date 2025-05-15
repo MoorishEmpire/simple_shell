@@ -487,7 +487,6 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     
     new_environ[env_size] = new_var;
     new_environ[env_size + 1] = NULL;
-    free(environ);
     environ = new_environ;
     return (0);
 }
@@ -535,7 +534,6 @@ int execute_unsetenv(const char *name)
     }
     new_environ[j] = NULL;
     
-    free(environ);
     environ = new_environ;
     return (0);
 }
