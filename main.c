@@ -432,8 +432,9 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
-        write(STDERR_FILENO, "setenv: Invalid variable name\n", 29);
-        return (-1);
+	    write(STDERR_FILENO, "./hsh: setenv: Invalid variable name\n", 36);
+	    exit_status = 1;
+	    return (-1);
     }
 
     env_size = 0;
@@ -463,7 +464,10 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     
     new_environ = malloc(sizeof(char *) * (env_size + 2));
     if (!new_environ)
+    {
+	    exit_status = 1;
 	    return (-1);
+    }
     i = 0;
     while (i < env_size)
     {
@@ -474,16 +478,13 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     if (!new_var)
     {
 	    free(new_environ);
+	    exit_status = 1;
 	    return (-1);
     }
     
     custom_strcpy(new_var, name);
     custom_strcat(new_var, "=");
     custom_strcat(new_var, value);
-    
-    environ = _realloc(environ, sizeof(char *) * (i + 1), sizeof(char *) * (i + 2));
-    if (!environ)
-        return (-1);
     
     new_environ[env_size] = new_var;
     new_environ[env_size + 1] = NULL;
@@ -502,7 +503,8 @@ int execute_unsetenv(const char *name)
     
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
-        write(STDERR_FILENO, "unsetenv: Invalid variable name\n", 31);
+	write(STDERR_FILENO, "./hsh: unsetenv: Invalid variable name\n", 38);
+        exit_status = 1;
         return (-1);
     }
 
@@ -518,7 +520,10 @@ int execute_unsetenv(const char *name)
    
     new_environ = malloc(sizeof(char *) * env_size);
     if (!new_environ)
-        return (-1);
+    {
+	    exit_status = 1;
+	    return (-1);
+    }
     while (environ[i])
     {
         if (!(custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '='))
