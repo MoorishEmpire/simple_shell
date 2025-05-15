@@ -433,61 +433,49 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
 	    write(STDERR_FILENO, "./hsh: setenv: Invalid variable name\n", 36);
-	    exit_status = 1;
 	    return (-1);
     }
 
     env_size = 0;
     while (environ[env_size])
-	    env_size++;
+        env_size++;
+
     while (environ[i])
     {
         if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
         {
             if (!overwrite)
                 return (0);
-            
             new_var = malloc(name_len + custom_strlen(value) + 2);
             if (!new_var)
                 return (-1);
-            
             custom_strcpy(new_var, name);
             custom_strcat(new_var, "=");
             custom_strcat(new_var, value);
-            
             free(environ[i]);
             environ[i] = new_var;
             return (0);
         }
         i++;
     }
-    
+
     new_environ = malloc(sizeof(char *) * (env_size + 2));
     if (!new_environ)
-    {
-	    exit_status = 1;
-	    return (-1);
-    }
-    i = 0;
-    while (i < env_size)
-    {
-	    new_environ[i] = environ[i];
-	    i++;
-    }
+        return (-1);
+    for (i = 0; i < env_size; i++)
+        new_environ[i] = environ[i];
     new_var = malloc(name_len + custom_strlen(value) + 2);
     if (!new_var)
     {
-	    free(new_environ);
-	    exit_status = 1;
-	    return (-1);
+        free(new_environ);
+        return (-1);
     }
-    
     custom_strcpy(new_var, name);
     custom_strcat(new_var, "=");
     custom_strcat(new_var, value);
-    
     new_environ[env_size] = new_var;
     new_environ[env_size + 1] = NULL;
+
     environ = new_environ;
     return (0);
 }
@@ -504,7 +492,6 @@ int execute_unsetenv(const char *name)
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
 	write(STDERR_FILENO, "./hsh: unsetenv: Invalid variable name\n", 38);
-        exit_status = 1;
         return (-1);
     }
 
@@ -572,19 +559,33 @@ void	execute_command(char **argv)
             execute_env(environ);
         else if (custom_strcmp(argv[0], "setenv") == 0)
         {
-            if (!argv[1])
-                write(STDERR_FILENO, "setenv: too few arguments\n", 25);
-	    else if (!argv[2])
-		    execute_setenv(argv[1], "", 1);
+            if (!argv[1] || !argv[2])
+	    {
+		write(STDERR_FILENO, "./hsh: setenv: Too few arguments\n", 33);
+		exit_status = 1;
+	    }
             else
-                execute_setenv(argv[1], argv[2], 1);
+	    {
+               if (execute_setenv(argv[1], argv[2], 1) == -1)
+		       exit_status = 1;
+	       else
+		       exit_status = 0;
+	    }
         }
         else if (custom_strcmp(argv[0], "unsetenv") == 0)
         {
             if (!argv[1])
-                write(STDERR_FILENO, "unsetenv: too few arguments\n", 28);
+	    {
+                write(STDERR_FILENO, "./hsh: unsetenv: too few arguments\n", 35);
+		exit_status = 1;
+	    }
             else
-                execute_unsetenv(argv[1]);
+	    {
+                if (execute_unsetenv(argv[1]) == -1)
+			exit_status = 1;
+		else
+			exit_status = 0;
+	    }
         }
         return;
 	}
