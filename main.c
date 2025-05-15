@@ -427,6 +427,8 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     int i = 0;
     int name_len = custom_strlen(name);
     char *new_var;
+    char **new_environ;
+    int	env_size;
     
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
@@ -434,6 +436,9 @@ int execute_setenv(const char *name, const char *value, int overwrite)
         return (-1);
     }
 
+    env_size = 0;
+    while (environ[env_size])
+	    env_size++;
     while (environ[i])
     {
         if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
@@ -456,9 +461,21 @@ int execute_setenv(const char *name, const char *value, int overwrite)
         i++;
     }
     
+    new_environ = malloc(sizeof(char *) * (env_size + 2));
+    if (!new_environ)
+	    return (-1);
+    i = 0;
+    while (i < env_size)
+    {
+	    new_environ[i] = environ[i];
+	    i++;
+    }
     new_var = malloc(name_len + custom_strlen(value) + 2);
     if (!new_var)
-        return (-1);
+    {
+	    free(new_environ);
+	    return (-1);
+    }
     
     custom_strcpy(new_var, name);
     custom_strcat(new_var, "=");
@@ -468,8 +485,10 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     if (!environ)
         return (-1);
     
-    environ[i] = new_var;
-    environ[i + 1] = NULL;
+    new_environ[env_size] = new_var;
+    new_environ[env_size + 1] = NULL;
+    free(environ);
+    environ = new_environ;
     return (0);
 }
 
@@ -479,6 +498,8 @@ int execute_unsetenv(const char *name)
     int j = 0;
     int name_len = custom_strlen(name);
     char **new_environ;
+    int env_size = 0;
+    int found = 0;
     
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
@@ -486,10 +507,17 @@ int execute_unsetenv(const char *name)
         return (-1);
     }
 
-    while (environ[i])
-        i++;
-    
-    new_environ = malloc(sizeof(char *) * i);
+    while (environ[env_size])
+    {
+	    if (custom_strncmp(environ[env_size], name, name_len) == 0 && environ[en_size][name_len] == '=')
+		    found = 1;
+	    env_size++;
+    }
+
+    if (!found)
+	    return (0);
+   
+    new_environ = malloc(sizeof(char *) * env_size);
     if (!new_environ)
         return (-1);
     while (environ[i])
