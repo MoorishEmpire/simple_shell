@@ -40,6 +40,22 @@ int	custom_strncmp(const char *s1, const char *s2, size_t n)
 	return (0);
 }
 
+void custom_strcpy(char *dest, const char *src)
+{
+    while (*src)
+        *dest++ = *src++;
+    *dest = '\0';
+}
+
+void custom_strcat(char *dest, const char *src)
+{
+    while (*dest)
+        dest++;
+    while (*src)
+        *dest++ = *src++;
+    *dest = '\0';
+}
+
 long	_atol(char *str)
 {
 	long	nbr;
@@ -403,97 +419,97 @@ void	execute_env(char **env)
 		write(STDOUT_FILENO, "\n", 1);
 		i++;
 	}
+	exit_status = 0;
 }
 
-int	execute_setenv(const char *name, const char *value, int overwrite)
+int execute_setenv(const char *name, const char *value, int overwrite)
 {
-	int i = 0;
-	int name_len = custom_strlen(name);
-	int value_len = custom_strlen(value);
-	int full_len;
-	char *new_var;
-	char **new_environ;
-	int j;
+    int i = 0;
+    int name_len = custom_strlen(name);
+    char *new_var;
+    
+    if (!name || name[0] == '\0' || custom_strchr(name, '='))
+    {
+        write(STDERR_FILENO, "setenv: Invalid variable name\n", 29);
+        return (-1);
+    }
 
-	if (!name || !value || name[0] == '\0' || custom_strchr(name, '='))
-	{
-		errno = EINVAL;
-		return (-1);
-	}
-	full_len = name_len + value_len + 2;
-	while (environ[i])
-	{
-		if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
-		{
-			if (!overwrite)
-				return (-1);
-			new_var = malloc(full_len);
-			if (!new_var)
-				return (-1);
-			snprintf(new_var, full_len, "%s=%s", name, value);
-			environ[i] = new_var;
-			return (0);
-		}
-		i++;
-	}
-	new_environ = malloc(sizeof(char *) * (i + 2));
-	if (!new_environ)
-	{
-		errno = EINVAL;
-		return (-1);
-	}
-	j = 0;
-	while (j < i)
-	{
-		new_environ[j] = environ[j];
-		j++;
-	}
-	new_var = malloc(full_len);
-	if (!new_var)
-		return (-1);
-	snprintf(new_var, full_len, "%s=%s", name, value);
-	new_environ[j] = new_var;
-	new_environ[j + 1] = NULL;
-	environ = new_environ;
-	return (0);
+    while (environ[i])
+    {
+        if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
+        {
+            if (!overwrite)
+                return (0);
+            
+            new_var = malloc(name_len + custom_strlen(value) + 2);
+            if (!new_var)
+                return (-1);
+            
+            custom_strcpy(new_var, name);
+            custom_strcat(new_var, "=");
+            custom_strcat(new_var, value);
+            
+            free(environ[i]);
+            environ[i] = new_var;
+            return (0);
+        }
+        i++;
+    }
+    
+    new_var = malloc(name_len + custom_strlen(value) + 2);
+    if (!new_var)
+        return (-1);
+    
+    custom_strcpy(new_var, name);
+    custom_strcat(new_var, "=");
+    custom_strcat(new_var, value);
+    
+    environ = _realloc(environ, sizeof(char *) * (i + 1), sizeof(char *) * (i + 2));
+    if (!environ)
+        return (-1);
+    
+    environ[i] = new_var;
+    environ[i + 1] = NULL;
+    return (0);
 }
 
-int	execute_unsetenv(const char *name)
+int execute_unsetenv(const char *name)
 {
-	int i = 0;
-	int j = 0;
-	int name_len = custom_strlen(name);
-	char **new_environ;
-	int found = 0;
+    int i = 0;
+    int j = 0;
+    int name_len = custom_strlen(name);
+    char **new_environ;
+    
+    if (!name || name[0] == '\0' || custom_strchr(name, '='))
+    {
+        write(STDERR_FILENO, "unsetenv: Invalid variable name\n", 31);
+        return (-1);
+    }
 
-	if (!name || name[0] == '\0' || custom_strchr(name, '='))
-	{
-		errno = EINVAL;
-		return (-1);
-	}
-	while (environ[i])
-	{
-		if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
-			found = 1;
-		i++;
-	}
-	if (found)
-		new_environ = malloc(sizeof(char *) * i);
-	else
-		return (-1);
-
-	i = 0;
-	while (environ[i])
-	{
-		if (!(custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '='))
-		{
-			new_environ[j] = environ[i];
-			j++;
-		}
-		i++;
-	}
-	environ = new_environ;
-	return (0);
+    while (environ[i])
+        i++;
+    
+    new_environ = malloc(sizeof(char *) * i);
+    if (!new_environ)
+        return (-1);
+    while (environ[i])
+    {
+        if (!(custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '='))
+        {
+            new_environ[j] = environ[i];
+            j++;
+        }
+        else
+        {
+            free(environ[i]);
+        }
+        i++;
+    }
+    new_environ[j] = NULL;
+    
+    free(environ);
+    environ = new_environ;
+    return (0);
 }
 
 int	is_builtin(char *cmd)
@@ -515,24 +531,28 @@ void	execute_command(char **argv)
 
 	if (!argv || !argv[0])
 		return ;
+
 	if (is_builtin(argv[0]))
 	{
-		if (custom_strcmp(argv[0], "env") == 0)
-		{
-			execute_env(environ);
-			exit_status = 0;
-		}
-		else if (custom_strcmp(argv[0], "setenv") == 0)
-		{
-			execute_setenv(argv[1], argv[2], 1);
-			exit_status = 0;
-		}
-		else if (custom_strcmp(argv[0], "unsetenv") == 0)
-		{
-			execute_unsetenv(argv[1]);
-			exit_status = 0;
-		}
-		return ;
+        if (custom_strcmp(argv[0], "env") == 0)
+            execute_env(environ);
+        else if (custom_strcmp(argv[0], "setenv") == 0)
+        {
+            if (!argv[1])
+                write(STDERR_FILENO, "setenv: too few arguments\n", 25);
+            else if (!argv[2])
+                execute_setenv(argv[1], "", 1);
+            else
+                execute_setenv(argv[1], argv[2], 1);
+        }
+        else if (custom_strcmp(argv[0], "unsetenv") == 0)
+        {
+            if (!argv[1])
+                write(STDERR_FILENO, "unsetenv: too few arguments\n", 28);
+            else
+                execute_unsetenv(argv[1]);
+        }
+        return;
 	}
 	full_path = find_in_path(argv[0], environ);
 	if (!full_path)
