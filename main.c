@@ -509,7 +509,7 @@ int execute_unsetenv(const char *name)
 
     while (environ[env_size])
     {
-	    if (custom_strncmp(environ[env_size], name, name_len) == 0 && environ[en_size][name_len] == '=')
+	    if (custom_strncmp(environ[env_size], name, name_len) == 0 && environ[env_size][name_len] == '=')
 		    found = 1;
 	    env_size++;
     }
