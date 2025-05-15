@@ -496,7 +496,7 @@ int execute_unsetenv(const char *name)
 {
     int i = 0;
     int j = 0;
-    int name_len = custom_strlen(name);
+    int name_len;
     char **new_environ;
     int env_size = 0;
     int found = 0;
@@ -508,36 +508,39 @@ int execute_unsetenv(const char *name)
         return (-1);
     }
 
+    name_len = custom_strlen(name);
     while (environ[env_size])
-    {
-	    if (custom_strncmp(environ[env_size], name, name_len) == 0 && environ[env_size][name_len] == '=')
-		    found = 1;
-	    env_size++;
-    }
+        env_size++;
 
-    if (!found)
-	    return (0);
-   
-    new_environ = malloc(sizeof(char *) * env_size);
+    new_environ = malloc(sizeof(char *) * (env_size + 1));
     if (!new_environ)
     {
-	    exit_status = 1;
-	    return (-1);
+        exit_status = 1;
+        return (-1);
     }
+
     while (environ[i])
     {
-        if (!(custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '='))
+        if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
+        {
+            free(environ[i]);
+            found = 1;
+        }
+        else
         {
             new_environ[j] = environ[i];
             j++;
         }
-        else
-        {
-            free(environ[i]);
-        }
         i++;
     }
     new_environ[j] = NULL;
+
+    if (!found)
+    {
+        free(new_environ);
+        exit_status = 0;
+        return (0);
+    }
     
     environ = new_environ;
     return (0);
@@ -569,8 +572,10 @@ void	execute_command(char **argv)
             execute_env(environ);
         else if (custom_strcmp(argv[0], "setenv") == 0)
         {
-            if (!argv[1] || !argv[2])
+            if (!argv[1])
                 write(STDERR_FILENO, "setenv: too few arguments\n", 25);
+	    else if (!argv[2])
+		    execute_setenv(argv[1], "", 1);
             else
                 execute_setenv(argv[1], argv[2], 1);
         }
