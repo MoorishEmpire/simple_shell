@@ -615,6 +615,7 @@ int execute_cd(const char *path)
 			}
 			write(STDOUT_FILENO, target_path, custom_strlen(target_path));
 			write(STDOUT_FILENO, "\n", 1);
+			free(target_path);
 			exit_status = 0;
 			return (0);
 		}
