@@ -716,7 +716,7 @@ void execute_command(char **argv)
         {
             if (!argv[1] || !argv[2])
             {
-                write(STDERR_FILENO, "./hsh: setenv: Too few arguments\n", 33);
+                write(STDERR_FILENO, "./hsh: 1: setenv: Too few arguments\n", 35);
                 exit_status = 1;
             }
             else
@@ -731,7 +731,7 @@ void execute_command(char **argv)
         {
             if (!argv[1])
             {
-                write(STDERR_FILENO, "./hsh: unsetenv: Too few arguments\n", 35);
+                write(STDERR_FILENO, "./hsh: 1: unsetenv: Too few arguments\n", 37);
                 exit_status = 1;
             }
             else
