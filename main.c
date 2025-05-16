@@ -452,7 +452,7 @@ char *execute_getenv(const char *name)
 	{
 		if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
 		{
-			value = custom_strdup(&environ[i][name_len + 1]);
+			value = custom_strdup(environ[i] + name_len + 1);
 			return (value);
 		}
 		i++;
@@ -584,19 +584,67 @@ int execute_unsetenv(const char *name)
     return (0);
 }
 
-int execute_cd(char *cmd)
+int execute_cd(const char *path)
 {
-	char *full_path;
-	char *old_path;
+	char *target_path = NULL;
+	char *old_pwd = NULL;
+	char *new_pwd = NULL;
+	int result;
 
-	if (*cmd == ' ')
-		cmd++;
-	if (chdir(cmd) == -1)
+	if (!path || path[0] == '\0')
+	{
+		target_path = execute_getenv("HOME");
+		if (!target_path)
+		{
+			write(STDERR_FILENO, "./hsh: cd: HOME not set\n", 24);
+			return (-1);
+		}
+	}
+	else if (path[0] == '-' && path[1] == '\0')
+	{
+		target_path = execute_getenv("OLDPWD");
+		if (!target_path)
+		{
+			write(STDERR_FILENO, "./hsh: cd: HOME not set\n", 24);
+			return (-1);
+		}
+		write(STDOUT_FILENO, target_path, custom_strlen(target_path));
+		write(STDOUT_FILENO, "\n", 1);
+	}
+	else
+		target_path = (char *)path;
+	old_pwd = execute_getenv("PWD");
+	if (!old_pwd)
+		old_pwd = getcwd(NULL, 0);
+	result = chdir(target_path);
+	if (result == -1)
+	{
+		write(STDERR_FILENO, "./hsh: cd ", 11);
+		write(STDERR_FILENO, target_path, custom_strlen(target_path));
+		write(STDERR_FILENO, ": No such file of directory\n", 28);
+		if (old_pwd != execute_getenv("PWD"))
+			free(old_pwd);
 		return (-1);
-	full_path = getcwd(cmd, 1024);
-	old_path = execute_getenv("PWD");
-	execute_setenv("PWD", full_path, 1);
-	execute_setenv("OLDPWD", old_path, 1);
+	}
+	new_pwd = getcwd(NULL, 0);
+	if (!new_pwd)
+	{
+		write(STDERR_FILENO, "./hsh: cd: getcwd failed\n", 25);
+		if (old_pwd != execute_getenv("PWD"))
+		       free(old_pwd);	
+		return (-1);
+	}
+	if ((execute_setenv("PWD", new_pwd, 1) == -1) || (old_pwd && execute_setenv("OLDPWD", old_pwd, 1) == -1))
+	{
+		write(STDERR_FILENO, "./hsh: cd: setenv failed\n", 25);
+		if (old_pwd != execute_getenv("PWD"))
+				free(old_pwd);
+		free(new_pwd);
+		return (0);
+	}
+	if (old_pwd != execute_getenv("PWD"))
+		free(old_pwd);
+	free(new_pwd);
 	return (0);
 }
 
@@ -661,26 +709,10 @@ void execute_command(char **argv)
         }
 	else if (custom_strcmp(argv[0], "cd") == 0)
 	{
-		if (!argv[1])
-		{
-			if (execute_cd(execute_getenv("HOME")) == -1)
-				exit_status = 1;
-			else
-				exit_status = 0;
-			
-		}
-		else if (argv[1][0] == '-')
-		{
-			if (execute_cd(execute_getenv("OLDPWD")) == -1)
-				exit_status = 1;
-		}
+		if (execute_cd(argv[1]) == -1)
+			exit_status = 1;
 		else
-		{
-			if (execute_cd(argv[1]) == -1)
-				exit_status = 1;
-			else
-				exit_status = 0;
-		}
+			exit_status = 0;
 	}
         return;
     }
