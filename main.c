@@ -598,10 +598,7 @@ int execute_cd(const char *path)
 	{
 		target_path = execute_getenv("HOME");
 		if (!target_path)
-		{
-			exit_status = 1;
 			return (-1);
-		}
 		free_target_path = 1;
 	}
 	else if (path[0] == '-' && path[1] == '\0')
@@ -618,7 +615,6 @@ int execute_cd(const char *path)
 			}
 			write(STDOUT_FILENO, target_path, custom_strlen(target_path));
 			write(STDOUT_FILENO, "\n", 1);
-			free(target_path);
 			exit_status = 0;
 			return (0);
 		}
@@ -660,25 +656,25 @@ int execute_cd(const char *path)
 		return (-1);
 	}
 	if (execute_setenv("PWD", new_pwd, 1) == -1)
-    {
-        write(STDERR_FILENO, "./hsh: 1: cd: setenv failed\n", 28);
-        free(old_pwd);
-        free(new_pwd);
-        if (free_target_path)
-            free(target_path);
-        exit_status = 1;
-        return (-1);
-    }
-    if (execute_setenv("OLDPWD", old_pwd, 1) == -1)
-    {
-        write(STDERR_FILENO, "./hsh: 1: cd: setenv failed\n", 28);
-        free(old_pwd);
-        free(new_pwd);
-        if (free_target_path)
-            free(target_path);
-        exit_status = 1;
-        return (-1);
-    }
+	{
+		write(STDERR_FILENO, "./hsh: 1: cd: setenv failed\n", 28);
+		free(old_pwd);
+		free(new_pwd);
+		if (free_target_path)
+			free(target_path);
+		exit_status = 1;
+		return (-1);
+	}
+	if (execute_setenv("OLDPWD", old_pwd, 1) == -1)
+	{
+		write(STDERR_FILENO, "./hsh: 1: cd: setenv failed\n", 28);
+		free(old_pwd);
+		free(new_pwd);
+		if (free_target_path)
+			free(target_path);
+		exit_status = 1;
+		return (-1);
+	}
 	free(old_pwd);
 	free(new_pwd);
 	if (free_target_path)
