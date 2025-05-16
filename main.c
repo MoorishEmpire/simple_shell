@@ -453,6 +453,8 @@ char *execute_getenv(const char *name)
 		if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
 		{
 			value = custom_strdup(environ[i] + name_len + 1);
+			if (!value)
+				return (NULL);
 			return (value);
 		}
 		i++;
@@ -468,7 +470,7 @@ int execute_setenv(const char *name, const char *value, int overwrite)
 
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
-        write(STDERR_FILENO, "./hsh: setenv: Invalid variable name\n", 36);
+        write(STDERR_FILENO, "./hsh: 1: setenv: Invalid variable name\n", 39);
         exit_status = 1;
         return (-1);
     }
@@ -538,7 +540,7 @@ int execute_unsetenv(const char *name)
 
     if (!name || name[0] == '\0' || custom_strchr(name, '='))
     {
-        write(STDERR_FILENO, "./hsh: unsetenv: Invalid variable name\n", 38);
+        write(STDERR_FILENO, "./hsh: 1: unsetenv: Invalid variable name\n", 41);
         exit_status = 1;
         return (-1);
     }
@@ -590,13 +592,14 @@ int execute_cd(const char *path)
 	char *old_pwd = NULL;
 	char *new_pwd = NULL;
 	int result;
+	int free_target_path = 0;
 
 	if (!path || path[0] == '\0')
 	{
 		target_path = execute_getenv("HOME");
 		if (!target_path)
 		{
-			write(STDERR_FILENO, "./hsh: cd: HOME not set\n", 24);
+			write(STDERR_FILENO, "./hsh: 1: cd: HOME not set\n", 27);
 			return (-1);
 		}
 	}
@@ -605,46 +608,64 @@ int execute_cd(const char *path)
 		target_path = execute_getenv("OLDPWD");
 		if (!target_path)
 		{
-			write(STDERR_FILENO, "./hsh: cd: HOME not set\n", 24);
-			return (-1);
+			target_path = getcwd(NULL, 0);
+			if (!target_path)
+			{
+				write(STDERR_FILENO, "./hsh: 1: cd: getcwd failed\n", 28);
+				return (-1);
+			}
+			write(STDOUT_FILENO, target_path, custom_strlen(target_path));
+			write(STDOUT_FILENO, "\n", 1);
+			free(target_path);
+			return (0);
 		}
 		write(STDOUT_FILENO, target_path, custom_strlen(target_path));
 		write(STDOUT_FILENO, "\n", 1);
+		free_target_path = 1;
 	}
 	else
 		target_path = (char *)path;
 	old_pwd = execute_getenv("PWD");
 	if (!old_pwd)
-		old_pwd = getcwd(NULL, 0);
+	{
+		write(STDERR_FILENO, "./hsh: 1: cd: getcwd failed\n", 28);
+		if (free_target_path)
+			free(target_path);
+		return (-1);
+	}
 	result = chdir(target_path);
 	if (result == -1)
 	{
-		write(STDERR_FILENO, "./hsh: cd ", 11);
+		write(STDERR_FILENO, "./hsh: 1: cd: can't cd to", 26);
 		write(STDERR_FILENO, target_path, custom_strlen(target_path));
 		write(STDERR_FILENO, ": No such file of directory\n", 28);
-		if (old_pwd != execute_getenv("PWD"))
-			free(old_pwd);
+		free(old_pwd);
+		if (free_target_path)
+			free(target_path);
 		return (-1);
 	}
 	new_pwd = getcwd(NULL, 0);
 	if (!new_pwd)
 	{
-		write(STDERR_FILENO, "./hsh: cd: getcwd failed\n", 25);
-		if (old_pwd != execute_getenv("PWD"))
-		       free(old_pwd);	
+		write(STDERR_FILENO, "./hsh: 1: cd: getcwd failed\n", 28);
+		free(old_pwd);	
+		if (free_target_path)
+			free(target_path);
 		return (-1);
 	}
 	if ((execute_setenv("PWD", new_pwd, 1) == -1) || (old_pwd && execute_setenv("OLDPWD", old_pwd, 1) == -1))
 	{
-		write(STDERR_FILENO, "./hsh: cd: setenv failed\n", 25);
-		if (old_pwd != execute_getenv("PWD"))
-				free(old_pwd);
+		write(STDERR_FILENO, "./hsh: 1: cd: setenv failed\n", 25);
+		free(old_pwd);
 		free(new_pwd);
+		if (free_target_path)
+			free(target_path);
 		return (0);
 	}
-	if (old_pwd != execute_getenv("PWD"))
-		free(old_pwd);
+	free(old_pwd);
 	free(new_pwd);
+	if (free_target_path)
+		free(target_path);
 	return (0);
 }
 
