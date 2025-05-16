@@ -598,10 +598,7 @@ int execute_cd(const char *path)
 	{
 		target_path = execute_getenv("HOME");
 		if (!target_path)
-		{
-			write(STDERR_FILENO, "./hsh: 1: cd: HOME not set\n", 27);
 			return (-1);
-		}
 	}
 	else if (path[0] == '-' && path[1] == '\0')
 	{
@@ -638,7 +635,6 @@ int execute_cd(const char *path)
 	{
 		write(STDERR_FILENO, "./hsh: 1: cd: can't cd to", 26);
 		write(STDERR_FILENO, target_path, custom_strlen(target_path));
-		write(STDERR_FILENO, ": No such file of directory\n", 28);
 		free(old_pwd);
 		if (free_target_path)
 			free(target_path);
