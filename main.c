@@ -599,7 +599,6 @@ int execute_cd(const char *path)
 		target_path = execute_getenv("HOME");
 		if (!target_path)
 		{
-			write(STDERR_FILENO, "./hsh: 1: cd: HOME not set\n", 27);
 			exit_status = 1;
 			return (-1);
 		}
