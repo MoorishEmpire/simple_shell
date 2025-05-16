@@ -422,6 +422,44 @@ void	execute_env(char **env)
 	exit_status = 0;
 }
 
+char	*custom_strdup(const char *s1)
+{
+	char	*res;
+	size_t	i;
+	size_t	len;
+
+	len = custom_strlen(s1);
+	res = malloc(len + 1);
+	if (!res)
+		return (NULL);
+	i = 0;
+	while (i < len)
+	{
+		res[i] = s1[i];
+		i++;
+	}
+	res[i] = '\0';
+	return (res);
+}
+
+char *execute_getenv(const char *name)
+{
+	int i = 0;
+	int name_len = custom_strlen(name);
+	char *value;
+
+	while (environ[i])
+	{
+		if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
+		{
+			value = custom_strdup(&environ[i][name_len + 1]);
+			return (value);
+		}
+		i++;
+	}
+	return (NULL);
+}
+
 int execute_setenv(const char *name, const char *value, int overwrite)
 {
     int i = 0, name_len, env_size = 0;
@@ -556,9 +594,9 @@ int execute_cd(char *cmd)
 	if (chdir(cmd) == -1)
 		return (-1);
 	full_path = getcwd(cmd, 1024);
-	old_path = getenv("PWD");
-	setenv("PWD", full_path, 1);
-	setenv("OLDPWD", old_path, 1);
+	old_path = execute_getenv("PWD");
+	execute_setenv("PWD", full_path, 1);
+	execute_setenv("OLDPWD", old_path, 1);
 	return (0);
 }
 
@@ -625,7 +663,7 @@ void execute_command(char **argv)
 	{
 		if (!argv[1])
 		{
-			if (execute_cd(getenv("HOME")) == -1)
+			if (execute_cd(execute_getenv("HOME")) == -1)
 				exit_status = 1;
 			else
 				exit_status = 0;
@@ -633,7 +671,7 @@ void execute_command(char **argv)
 		}
 		else if (argv[1][0] == '-')
 		{
-			if (execute_cd(getenv("OLDPWD")) == -1)
+			if (execute_cd(execute_getenv("OLDPWD")) == -1)
 				exit_status = 1;
 		}
 		else
