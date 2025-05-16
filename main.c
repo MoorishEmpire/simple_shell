@@ -637,7 +637,7 @@ int execute_cd(const char *path)
 	result = chdir(target_path);
 	if (result == -1)
 	{
-		write(STDERR_FILENO, "./hsh: 1: cd: can't cd to", 26);
+		write(STDERR_FILENO, "./hsh: 1: cd: can't cd to ", 26);
 		write(STDERR_FILENO, target_path, custom_strlen(target_path));
 		write(STDERR_FILENO, "\n", 1);
 		free(old_pwd);
