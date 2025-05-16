@@ -546,6 +546,22 @@ int execute_unsetenv(const char *name)
     return (0);
 }
 
+int execute_cd(char *cmd)
+{
+	char *full_path;
+	char *old_path;
+
+	if (*cmd == ' ')
+		cmd++;
+	if (chdir(cmd) == -1)
+		return (-1);
+	full_path = getcwd(cmd, 1024);
+	old_path = getenv("PWD");
+	setenv("PWD", full_path, 1);
+	setenv("OLDPWD", old_path, 1);
+	return (0);
+}
+
 int	is_builtin(char *cmd)
 {
 	if (custom_strcmp(cmd, "env") == 0)
@@ -553,6 +569,8 @@ int	is_builtin(char *cmd)
 	else if (custom_strcmp(cmd, "setenv") == 0)
 		return (1);
 	else if (custom_strcmp(cmd, "unsetenv") == 0)
+		return (1);
+	else if (custom_strcmp(cmd, "cd") == 0)
 		return (1);
 	return (0);
 }
@@ -603,6 +621,29 @@ void execute_command(char **argv)
                     exit_status = 0;
             }
         }
+	else if (custom_strcmp(argv[0], "cd") == 0)
+	{
+		if (!argv[1])
+		{
+			if (execute_cd(getenv("HOME")) == -1)
+				exit_status = 1;
+			else
+				exit_status = 0;
+			
+		}
+		else if (argv[1][0] == '-')
+		{
+			if (execute_cd(getenv("OLDPWD")) == -1)
+				exit_status = 1;
+		}
+		else
+		{
+			if (execute_cd(argv[1]) == -1)
+				exit_status = 1;
+			else
+				exit_status = 0;
+		}
+	}
         return;
     }
 
