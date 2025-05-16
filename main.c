@@ -598,7 +598,12 @@ int execute_cd(const char *path)
 	{
 		target_path = execute_getenv("HOME");
 		if (!target_path)
+		{
+			write(STDERR_FILENO, "./hsh: 1: cd: HOME not set\n", 27);
+			exit_status = 1;
 			return (-1);
+		}
+		free_target_path = 1;
 	}
 	else if (path[0] == '-' && path[1] == '\0')
 	{
@@ -609,11 +614,13 @@ int execute_cd(const char *path)
 			if (!target_path)
 			{
 				write(STDERR_FILENO, "./hsh: 1: cd: getcwd failed\n", 28);
+				exit_status = 1;
 				return (-1);
 			}
 			write(STDOUT_FILENO, target_path, custom_strlen(target_path));
 			write(STDOUT_FILENO, "\n", 1);
 			free(target_path);
+			exit_status = 0;
 			return (0);
 		}
 		write(STDOUT_FILENO, target_path, custom_strlen(target_path));
@@ -622,12 +629,13 @@ int execute_cd(const char *path)
 	}
 	else
 		target_path = (char *)path;
-	old_pwd = execute_getenv("PWD");
+	old_pwd = getcwd(NULL, 0);
 	if (!old_pwd)
 	{
 		write(STDERR_FILENO, "./hsh: 1: cd: getcwd failed\n", 28);
 		if (free_target_path)
 			free(target_path);
+		exit_status = 1;
 		return (-1);
 	}
 	result = chdir(target_path);
@@ -639,6 +647,7 @@ int execute_cd(const char *path)
 		free(old_pwd);
 		if (free_target_path)
 			free(target_path);
+		exit_status = 1;
 		return (-1);
 	}
 	new_pwd = getcwd(NULL, 0);
@@ -648,21 +657,34 @@ int execute_cd(const char *path)
 		free(old_pwd);	
 		if (free_target_path)
 			free(target_path);
+		exit_status = 1;
 		return (-1);
 	}
-	if ((execute_setenv("PWD", new_pwd, 1) == -1) || (old_pwd && execute_setenv("OLDPWD", old_pwd, 1) == -1))
-	{
-		write(STDERR_FILENO, "./hsh: 1: cd: setenv failed\n", 25);
-		free(old_pwd);
-		free(new_pwd);
-		if (free_target_path)
-			free(target_path);
-		return (0);
-	}
+	if (execute_setenv("PWD", new_pwd, 1) == -1)
+    {
+        write(STDERR_FILENO, "./hsh: 1: cd: setenv failed\n", 28);
+        free(old_pwd);
+        free(new_pwd);
+        if (free_target_path)
+            free(target_path);
+        exit_status = 1;
+        return (-1);
+    }
+    if (execute_setenv("OLDPWD", old_pwd, 1) == -1)
+    {
+        write(STDERR_FILENO, "./hsh: 1: cd: setenv failed\n", 28);
+        free(old_pwd);
+        free(new_pwd);
+        if (free_target_path)
+            free(target_path);
+        exit_status = 1;
+        return (-1);
+    }
 	free(old_pwd);
 	free(new_pwd);
 	if (free_target_path)
 		free(target_path);
+	exit_status = 0;
 	return (0);
 }
 
