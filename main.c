@@ -921,6 +921,7 @@ char	**ft_split(char const *s, char c)
 void	_execute_multiple(char *cmd)
 {
 	char **commands;
+	char **argv;
 	int i;
 	int status;
 	pid_t pid;
@@ -929,7 +930,7 @@ void	_execute_multiple(char *cmd)
 	i = 0;
 	while (commands[i])
 	{
-		char **argv = build_argv(commands[i]);
+		argv = build_argv(commands[i]);
 		if (!argv)
 			continue;
 		pid = fork();
@@ -940,9 +941,9 @@ void	_execute_multiple(char *cmd)
 	       }
 	       else
 		       wait(&status);
-	       ft_free(argv, i);
 	       i++;
 	}
+	ft_free(argv, i);
 }
 
 int main(int ac, char **av)
