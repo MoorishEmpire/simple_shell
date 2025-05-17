@@ -807,10 +807,147 @@ char **copy_environ(void)
     return new_environ;
 }
 
+char	*ft_substr(char const *s, unsigned int start, size_t len)
+{
+	char	*ptr;
+	size_t	i;
+	size_t	ptr_size;
+	size_t	s_len;
+
+	if (!s)
+		return (NULL);
+	s_len = custom_strlen(s);
+	if (start >= s_len)
+		return (custom_strdup(""));
+	if (s_len >= start + len)
+		ptr_size = len;
+	else
+		ptr_size = s_len - start;
+	ptr = malloc(ptr_size + 1);
+	if (!ptr)
+		return (NULL);
+	i = 0;
+	while (i < ptr_size)
+	{
+		ptr[i] = s[start + i];
+		i++;
+	}
+	ptr[i] = '\0';
+	return (ptr);
+}
+
+static int	ft_count_words(char const *s, char c)
+{
+	int	count;
+
+	count = 0;
+	while (*s)
+	{
+		while (*s == c)
+			s++;
+		if (*s && *s != c)
+			count++;
+		while (*s && *s != c)
+			s++;
+	}
+	return (count);
+}
+
+static char	*ft_allocate(char const*s, char c)
+{
+	size_t	len;
+	char	*new;
+
+	len = 0;
+	while (s[len] && s[len] != c)
+		len++;
+	new = ft_substr(s, 0, len);
+	return (new);
+}
+
+static void	*ft_free(char **words, int count)
+{
+	int	i;
+
+	i = 0;
+	while (i < count)
+		free(words[i++]);
+	free(words);
+	return (NULL);
+}
+
+static char	**ft_populate(char **words, char const *s, char c, int count_words)
+{
+	int	count;
+
+	count = 0;
+	while (*s && count < count_words)
+	{
+		while (*s == c)
+			s++;
+		if (*s && *s != c)
+		{
+			words[count] = ft_allocate(s, c);
+			if (words[count] == NULL)
+			{
+				ft_free(words, count);
+				return (NULL);
+			}
+			count++;
+		}
+		while (*s && *s != c)
+			s++;
+	}
+	words[count] = NULL;
+	return (words);
+}
+
+char	**ft_split(char const *s, char c)
+{
+	char	**ptr;
+	int		count_words;
+
+	if (!s)
+		return (NULL);
+	count_words = ft_count_words(s, c);
+	ptr = malloc((count_words + 1) * sizeof(char *));
+	if (ptr == NULL)
+		return (NULL);
+	ptr = ft_populate(ptr, s, c, count_words);
+	return (ptr);
+}
+
+
+void	_execute_multiple(char *cmd)
+{
+	char **commands;
+	int i;
+	int status;
+	pid_t pid;
+
+	commands = ft_split(cmd, ';');
+	i = 0;
+	while (commands[i])
+	{
+		char **argv = build_argv(commands[i]);
+		if (!argv)
+			continue;
+		pid = fork();
+	       if (pid == 0)
+	       {
+		       execute_command(argv);
+		       exit(1);
+	       }
+	       else
+		       wait(&status);
+	       ft_free(argv, i);
+	       i++;
+	}
+}
+
 int main(int ac, char **av)
 {
     char *cmd;
-    char **argv;
     int is_interactive;
     char *ptr;
     int i;
@@ -885,19 +1022,7 @@ int main(int ac, char **av)
             free(environ);
             exit(exit_status);
         }
-        argv = build_argv(cmd);
-        free(cmd);
-        if (argv)
-        {
-            execute_command(argv);
-            i = 0;
-            while (argv[i])
-            {
-                free(argv[i]);
-                i++;
-            }
-            free(argv);
-        }
+	_execute_multiple(cmd);
     }
     i = 0;
     while (environ[i])
