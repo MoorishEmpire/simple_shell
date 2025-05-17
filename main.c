@@ -917,7 +917,6 @@ char	**ft_split(char const *s, char c)
 	return (ptr);
 }
 
-
 void	_execute_multiple(char *cmd)
 {
 	char **commands;
@@ -965,6 +964,7 @@ void	_execute_multiple(char *cmd)
 		else if (pid == 0)
 		{
 		       execute_command(argv);
+		       ft_free(argv, count_tokens(commands[i]));
 		       exit(exit_status);
 		}
 	       else
@@ -980,12 +980,19 @@ void	_execute_multiple(char *cmd)
 	free(cmd);
 }
 
+void free_environ(char **env)
+{
+    int i = 0;
+    while (env[i])
+        free(env[i++]);
+    free(env);
+}
+
 int main(int ac, char **av)
 {
     char *cmd;
     int is_interactive;
     char *ptr;
-    int i;
     char *num_str;
     long num;
 
@@ -1051,17 +1058,10 @@ int main(int ac, char **av)
                 }
             }
             free(cmd);
-            i = 0;
-            while (environ[i])
-                free(environ[i++]);
-            free(environ);
+	    free_environ(environ);
             exit(exit_status);
         }
 	_execute_multiple(cmd);
     }
-    i = 0;
-    while (environ[i])
-        free(environ[i++]);
-    free(environ);
     return (exit_status);
 }
