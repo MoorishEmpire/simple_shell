@@ -927,23 +927,57 @@ void	_execute_multiple(char *cmd)
 	pid_t pid;
 
 	commands = ft_split(cmd, ';');
+	if (!commands)
+	{
+		free(cmd);
+		return ;
+	}
 	i = 0;
 	while (commands[i])
 	{
+		if (commands[i][0] == '\0')
+		{
+			i++;
+			continue;
+		}
 		argv = build_argv(commands[i]);
 		if (!argv)
+		{
+			i++;
 			continue;
+		}
+		if (is_builtin(argv[0]))
+		{
+			execute_command(argv);
+			ft_free(argv, count_tokens(commands[i]));
+			i++;
+			continue;
+		}
 		pid = fork();
-	       if (pid == 0)
-	       {
+		if (pid < 0)
+		{
+			perror("fork");
+			exit_status = 1;
+			ft_free(argv, count_tokens(commands[i]));
+			i++;
+			continue;
+		}
+		else if (pid == 0)
+		{
 		       execute_command(argv);
-		       exit(1);
-	       }
+		       exit(exit_status);
+		}
 	       else
-		       wait(&status);
+	       {
+		       waitpid(pid, &status, 0);
+		       if (WIFEXITED(status))
+			       exit_status = WEXITSTATUS(status);
+		       ft_free(argv, count_tokens(commands[i]));
+	       }
 	       i++;
 	}
-	ft_free(argv, i);
+	ft_free(commands, i);
+	free(cmd);
 }
 
 int main(int ac, char **av)
