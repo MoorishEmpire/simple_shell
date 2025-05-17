@@ -7,7 +7,8 @@
 #include <errno.h>
 
 extern char	**environ;
-int			exit_status = 0;
+char		**g_environ_copy;
+int		exit_status = 0;
 char		*program;
 
 #define DELIM " \n"
@@ -448,11 +449,11 @@ char *execute_getenv(const char *name)
 	int name_len = custom_strlen(name);
 	char *value;
 
-	while (environ[i])
+	while (g_environ_copy[i])
 	{
-		if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
+		if (custom_strncmp(g_environ_copy[i], name, name_len) == 0 && g_environ_copy[i][name_len] == '=')
 		{
-			value = custom_strdup(environ[i] + name_len + 1);
+			value = custom_strdup(g_environ_copy[i] + name_len + 1);
 			if (!value)
 				return (NULL);
 			return (value);
@@ -476,12 +477,12 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     }
 
     name_len = custom_strlen(name);
-    while (environ[env_size])
+    while (g_environ_copy[env_size])
         env_size++;
 
-    while (environ[i])
+    while (g_environ_copy[i])
     {
-        if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
+        if (custom_strncmp(g_environ_copy[i], name, name_len) == 0 && g_environ_copy[i][name_len] == '=')
         {
             if (!overwrite)
             {
@@ -497,8 +498,8 @@ int execute_setenv(const char *name, const char *value, int overwrite)
             custom_strcpy(new_var, name);
             custom_strcat(new_var, "=");
             custom_strcat(new_var, value);
-            free(environ[i]);
-            environ[i] = new_var;
+            free(g_environ_copy[i]);
+            g_environ_copy[i] = new_var;
             exit_status = 0;
             return (0);
         }
@@ -512,7 +513,7 @@ int execute_setenv(const char *name, const char *value, int overwrite)
         return (-1);
     }
     for (i = 0; i < env_size; i++)
-        new_environ[i] = environ[i];
+        new_environ[i] = g_environ_copy[i];
     new_var = malloc(name_len + custom_strlen(value) + 2);
     if (!new_var)
     {
@@ -526,8 +527,8 @@ int execute_setenv(const char *name, const char *value, int overwrite)
     new_environ[env_size] = new_var;
     new_environ[env_size + 1] = NULL;
 
-    old_environ = environ;
-    environ = new_environ;
+    old_environ = g_environ_copy;
+    g_environ_copy = new_environ;
     free(old_environ);
     exit_status = 0;
     return (0);
@@ -546,7 +547,7 @@ int execute_unsetenv(const char *name)
     }
 
     name_len = custom_strlen(name);
-    while (environ[env_size])
+    while (g_environ_copy[env_size])
         env_size++;
 
     new_environ = malloc(sizeof(char *) * (env_size + 1));
@@ -556,16 +557,16 @@ int execute_unsetenv(const char *name)
         return (-1);
     }
 
-    while (environ[i])
+    while (g_environ_copy[i])
     {
-        if (custom_strncmp(environ[i], name, name_len) == 0 && environ[i][name_len] == '=')
+        if (custom_strncmp(g_environ_copy[i], name, name_len) == 0 && g_environ_copy[i][name_len] == '=')
         {
-            free(environ[i]);
+            free(g_environ_copy[i]);
             found = 1;
         }
         else
         {
-            new_environ[j] = environ[i];
+            new_environ[j] = g_environ_copy[i];
             j++;
         }
         i++;
@@ -579,8 +580,8 @@ int execute_unsetenv(const char *name)
         return (0);
     }
 
-    old_environ = environ;
-    environ = new_environ;
+    old_environ = g_environ_copy;
+    g_environ_copy = new_environ;
     free(old_environ);
     exit_status = 0;
     return (0);
@@ -710,7 +711,7 @@ void execute_command(char **argv)
     {
         if (custom_strcmp(argv[0], "env") == 0)
         {
-            execute_env(environ);
+            execute_env(g_environ_copy);
             exit_status = 0;
         }
         else if (custom_strcmp(argv[0], "setenv") == 0)
@@ -753,7 +754,7 @@ void execute_command(char **argv)
         return;
     }
 
-    full_path = find_in_path(argv[0], environ);
+    full_path = find_in_path(argv[0], g_environ_copy);
     if (!full_path)
     {
         exit_status = 127;
@@ -768,9 +769,9 @@ void execute_command(char **argv)
     }
     else if (pid == 0)
     {
-        execve(full_path, argv, environ);
-        perror("execve");
-        exit(EXIT_FAILURE);
+        execve(full_path, argv, g_environ_copy);
+	perror(argv[0]);
+	exit(127);
     }
     else
     {
@@ -780,6 +781,7 @@ void execute_command(char **argv)
     }
 }
 
+/*
 char **copy_environ(void)
 {
     int env_size = 0;
@@ -805,6 +807,37 @@ char **copy_environ(void)
     }
     new_environ[env_size] = NULL;
     return new_environ;
+}
+*/
+
+char **copy_shell_environ(void)
+{
+    extern char **environ;
+    int env_size = 0;
+    char **new_environ_copy;
+    int i;
+
+    if (!environ) return NULL;
+    while (environ[env_size])
+        env_size++;
+
+    new_environ_copy = malloc(sizeof(char *) * (env_size + 1));
+    if (!new_environ_copy)
+        return NULL;
+
+    for (i = 0; i < env_size; i++)
+    {
+        new_environ_copy[i] = custom_strdup(environ[i]);
+        if (!new_environ_copy[i])
+        {
+            while (--i >= 0)
+                free(new_environ_copy[i]);
+            free(new_environ_copy);
+            return NULL;
+        }
+    }
+    new_environ_copy[env_size] = NULL;
+    return new_environ_copy;
 }
 
 char	*ft_substr(char const *s, unsigned int start, size_t len)
@@ -836,85 +869,82 @@ char	*ft_substr(char const *s, unsigned int start, size_t len)
 	return (ptr);
 }
 
-static int	ft_count_words(char const *s, char c)
+static int ft_count_words(char const *s, char c)
 {
-	int	count;
-
-	count = 0;
-	while (*s)
-	{
-		while (*s == c)
-			s++;
-		if (*s && *s != c)
-			count++;
-		while (*s && *s != c)
-			s++;
-	}
-	return (count);
+    int count = 0;
+    int in_word = 0;
+    while (*s)
+    {
+        if (*s == c)
+        {
+            in_word = 0;
+        }
+        else if (!in_word)
+        {
+            in_word = 1;
+            count++;
+        }
+        s++;
+    }
+    return (count);
 }
 
-static char	*ft_allocate(char const*s, char c)
+static char *ft_allocate(char const *s, char c)
 {
-	size_t	len;
-	char	*new;
-
-	len = 0;
-	while (s[len] && s[len] != c)
-		len++;
-	new = ft_substr(s, 0, len);
-	return (new);
+    size_t len = 0;
+    while (s[len] && s[len] != c)
+        len++;
+    return (ft_substr(s, 0, len));
 }
 
-static void	*ft_free(char **words, int count)
+static void *ft_free(char **words, int count)
 {
-	int	i;
-
-	i = 0;
-	while (i < count)
-		free(words[i++]);
-	free(words);
-	return (NULL);
+    int i = 0;
+    while (i < count)
+        free(words[i++]);
+    free(words);
+    return (NULL);
 }
 
-static char	**ft_populate(char **words, char const *s, char c, int count_words)
+static char **ft_populate(char **words, char const *s, char c, int count_words)
 {
-	int	count;
-
-	count = 0;
-	while (*s && count < count_words)
-	{
-		while (*s == c)
-			s++;
-		if (*s && *s != c)
-		{
-			words[count] = ft_allocate(s, c);
-			if (words[count] == NULL)
-			{
-				ft_free(words, count);
-				return (NULL);
-			}
-			count++;
-		}
-		while (*s && *s != c)
-			s++;
-	}
-	words[count] = NULL;
-	return (words);
+    int count = 0;
+    while (*s && count < count_words)
+    {
+        while (*s == c || *s == ' ' || *s == '\t')
+            s++;
+        if (*s && *s != c)
+        {
+            words[count] = ft_allocate(s, c);
+            if (!words[count])
+                return (ft_free(words, count));
+            count++;
+        }
+        while (*s && *s != c)
+            s++;
+    }
+    words[count] = NULL;
+    return (words);
 }
 
-char	**ft_split(char const *s, char c)
+char **ft_split(char const *s, char c)
 {
-	char	**ptr;
-	int		count_words;
+    char **ptr;
+    int count_words;
 
-	if (!s)
-		return (NULL);
-	count_words = ft_count_words(s, c);
-	ptr = malloc((count_words + 1) * sizeof(char *));
-	if (ptr == NULL)
-		return (NULL);
-	ptr = ft_populate(ptr, s, c, count_words);
-	return (ptr);
+    if (!s)
+        return (NULL);
+    while (*s == c || *s == ' ' || *s == '\t')
+        s++;
+    if (!*s)
+        return (NULL);
+    count_words = ft_count_words(s, c);
+    if (count_words == 0)
+        return (NULL);
+    ptr = malloc((count_words + 1) * sizeof(char *));
+    if (!ptr)
+        return (NULL);
+    return (ft_populate(ptr, s, c, count_words));
 }
 
 void	_execute_multiple(char *cmd)
@@ -977,7 +1007,6 @@ void	_execute_multiple(char *cmd)
 	       i++;
 	}
 	ft_free(commands, i);
-	free(cmd);
 }
 
 void free_environ(char **env)
@@ -998,7 +1027,13 @@ int main(int ac, char **av)
 
     (void)ac;
     program = av[0];
-    environ = copy_environ();
+    g_environ_copy = copy_shell_environ();
+    if (!g_environ_copy && environ && environ[0])
+    {
+        write(STDERR_FILENO, program, custom_strlen(program));
+        write(STDERR_FILENO, ": Failed to initialize environment\n", 33);
+        exit(1);
+    }
     if (!environ)
     {
         write(STDERR_FILENO, "Failed to initialize environment\n", 32);
@@ -1058,10 +1093,24 @@ int main(int ac, char **av)
                 }
             }
             free(cmd);
-	    free_environ(environ);
+	    cmd = NULL;
             exit(exit_status);
         }
 	_execute_multiple(cmd);
+	free(cmd);
+	cmd = NULL;
+	if (!is_interactive)
+		break;
+    }
+    if (cmd != NULL)
+    {
+	    free(cmd);
+	    cmd = NULL;
+    }
+    if (g_environ_copy != NULL)
+    {
+        free_environ(g_environ_copy);
+        g_environ_copy = NULL;
     }
     return (exit_status);
 }
